@@ -1,0 +1,233 @@
+"Phrases"
+{
+	"DebugMessage"
+	{
+		"#format"	"{1:s},{2:t},{3:s},{4:d},{5:d}"
+		"en"		"{1}{2}{3} Client ID {4} (rank points {5}) issued a debug command."
+		"de"		"{1} aus {2} verbunden!\n[Ranglistenplatz {3} (von {4}) mit {5} Punkten!]"
+	}
+	"ChatPrefix"
+	{
+		"en"		"[SM] [FoF Ranking] "
+	}
+	"WelcomeWithCountry"
+	{
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i}"
+		"en"		"{1} connected from {2}!\n[Ranked: #{3} out of {4} players with {5} Points!]"
+		"de"		"{1} aus {2} verbunden!\n[Ranglistenplatz {3} (von {4}) mit {5} Punkten!]"
+	}
+	"WelcomeWithoutCountry"
+	{
+		"#format"	"{1:s},{2:i},{3:i},{4:i}"
+		"en"		"{1} connected!\n[Ranked: #{2} out of {3} players with {4} Points!]"
+		"de"		"{1} verbunden!\n[Ranglistenplatz {2} (von {3}) mit {4} Punkten!]"
+	}
+	"ConfigReloaded"
+	{
+		"en"		"Config successfully reloaded."
+		"de"		"Konfiguration erfolgreich neu geladen."
+	}
+	"ConfigReloadFailed"
+	{
+		"en"		"Configuration file parsing failed! (%s)"
+		"de"		"Fehler in Konfigurationsdatei! (%s)"
+	}
+	"DeathMessage"
+	{
+		"en"		"You loose %d points for being killed."
+		"de"		"Du wurdest getötet und verlierst %d Punkte."
+	}
+	"UngratefulDeathMessage"
+	{
+		"en"		"Ungrateful death: you loose %d points."
+		"de"		"Ehrloser Tod: Dir werden %d Punkte abgezogen."
+	}
+	"KillMessage"
+	{
+		"#format"	"{1:i},{2:s}"
+		"en"		"You earn {1} points for killing {2}."
+		"de"		"Du hast {2} getötet und erhältst {1} Punkte."
+	}
+	"HeadshotMessage"
+	{
+		"#format"	"{1:i},{2:s}"
+		"en"		"You earn {1} points for killing {2} by headshot."
+		"de"		"Du hast {2} per Kopfschuss getötet und erhältst {1} Punkte."
+	}
+	"AssistMessagePlural"
+	{
+		"#format"	"{1:i},{2:s}"
+		"en"		"You earn {1} points for an assist-kill."
+		"de"		"Du erhältst {1} Punkte für einen Assist-Kill."
+	}
+	"AssistMessageSingular"
+	{
+		"en"		"You earn 1 point for an assist-kill."
+		"de"		"Du erhältst einen Punkt für einen Assist-Kill."
+	}
+	"RanklistTitle"
+	{
+		"en"		"Ranking:"
+		"de"		"Rangliste:"
+	}
+	"kick-fall"
+	{
+		"en"		"Kick and Fall"
+		"de"		"Tritt in den Abgrund"
+	}
+	"flame"
+	{
+		"en"		"Flames"
+		"de"		"Flammen"
+	}
+	"thrown_gun"
+	{
+		"en"		"Thrown gun"
+		"de"		"Geworfene Pistole"
+	}
+	"kick"
+	{
+		"en"		"Kick"
+		"de"		"Tritt"
+	}
+	"blast"
+	{
+		"en"		"Blast"
+		"de"		"Explosion"
+	}
+	"physics"
+	{
+		"en"		"Thrown Dynamite"
+		"de"		"Geworfenes Dynamit"
+	}
+	"dynamite_black"
+	{
+		"en"		"Black Dynamite"
+		"de"		"Schwarzes Dynamit"
+	}
+	"dynamite_yellow"
+	{
+		"en"		"Yellow Dynamite"
+		"de"		"Gelbes Dynamit"
+	}
+	"dynamite"
+	{
+		"en"		"Dynamite"
+		"de"		"Dynamit"
+	}
+	"arrow"
+	{
+		"en"		"Bow and Arrow"
+		"de"		"Pfeil und Bogen"
+	}
+	"thrown_knife"
+	{
+		"en"		"Thrown Knife"
+		"de"		"Geworfenes Messer"
+	}
+	"thrown_axe"
+	{
+		"en"		"Thrown Axe"
+		"de"		"Geworfene Axt"
+	}
+	"thrown_machete"
+	{
+		"en"		"Thrown Machete"
+		"de"		"Geworfene Machete"
+	}
+	"fists"
+	{
+		"en"		"Fists"
+		"de"		"Fäuste"
+	}
+	"fists_brass"
+	{
+		"en"		"Brass Knuckles"
+		"de"		"Schlagring"
+	}
+	"knife"
+	{
+		"en"		"Knife"
+		"de"		"Messer"
+	}
+	"deringer"
+	{
+		"en"		"Deringer"
+		"de"		"Deringer"
+	}
+	"volcanic"
+	{
+		"en"		"Volcanic Pistol"
+		"de"		"Volcanic Pistol"
+	}
+	"coltnavy"
+	{
+		"en"		"Colt Navy"
+		"de"		"Colt Navy"
+	}
+	"axe"
+	{
+		"en"		"Axe"
+		"de"		"Axt"
+	}
+	"sawedoff_shotgun"
+	{
+		"en"		"Sawed-Off Shotgun"
+		"de"		"Sawed-Off Shotgun"
+	}
+	"maresleg"
+	{
+		"en"		"Mare's Leg"
+		"de"		"Mare's Leg"
+	}
+	"remington_army"
+	{
+		"en"		"Remington Army"
+		"de"		"Remington Army"
+	}
+	"schofield"
+	{
+		"en"		"SW Schofield"
+		"de"		"SW Schofield"
+	}
+	"carbine"
+	{
+		"en"		"Smith Carbine"
+		"de"		"Smith Carbine"
+	}
+	"peacemaker"
+	{
+		"en"		"Colt Peacemaker"
+		"de"		"Colt Peacemaker"
+	}
+	"henryrifle"
+	{
+		"en"		"Henry Rifle"
+		"de"		"Henry Rifle"
+	}
+	"coachgun"
+	{
+		"en"		"Coachgun"
+		"de"		"Coachgun"
+	}
+	"machete"
+	{
+		"en"		"Machete"
+		"de"		"Machete"
+	}
+	"shotgun"
+	{
+		"en"		"Pump Shotgun"
+		"de"		"Pump Shotgun"
+	}
+	"sharps"
+	{
+		"en"		"Sharps Rifle"
+		"de"		"Sharps Rifle"
+	}
+	"walker"
+	{
+		"en"		"Colt Walker"
+		"de"		"Colt Walker"
+	}
+}
