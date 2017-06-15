@@ -37,6 +37,8 @@
  * TODO: proper welcome message (introducing the main rank commands)
  * TODO: Play "\sound\player\voice\brag_bestinwest.wav" when #1 connects/enters (or "\sound\player\voice\howl_yeehaw2.wav" or "\sound\monastery\bell.wav")
  * TODO: play sound, if #1 connects
+ * TODO: implement Active-Flag for players
+ * TODO: implement killstreak top 10
  * TODO: actualize config file, there are weapons missing
  */
 
@@ -57,7 +59,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Statistics and Ranking"
-#define PLUGIN_VERSION 		"0.0.2"
+#define PLUGIN_VERSION 		"0.2.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
@@ -74,6 +76,7 @@
 #define MAX_WEAPONS 50
 
 #define MAX_MESSAGE_LENGTH 128
+#define MAX_PANELLINE_LENGTH 60
 #define STEAMID_LENGTH 25
 
 #define COMMAND_TOP10 "sm_top10"
@@ -121,6 +124,7 @@ new g_PlayerKillstreak[MAXPLAYERS + 1];			// array for current killstreak of pla
 new g_PlayerRank[MAXPLAYERS + 1];
 new g_PlayerSpawnedAt[MAXPLAYERS + 1];			// array for keeping track of the time alive of a player
 new g_PlayerPoints[MAXPLAYERS + 1];
+new g_CurrentMenuState[MAXPLAYERS + 1][2];		// for storing the state of the ranking list menu when a ranking panel is displayed as a sub menu
 new g_PlayerDbId[MAXPLAYERS + 1];
 new bool:g_PlayerSilentInit[MAXPLAYERS + 1];	// array to determine if player data should be loaded silently during plugin startup
 
@@ -155,7 +159,7 @@ public OnPluginStart() {
 	RegAdminCmd(COMMAND_RELOAD, ReloadConfigHandler, ADMFLAG_CUSTOM1, "FoF Statistics and Ranking: Reload the config file");
 	RegAdminCmd(COMMAND_GIVEPOINTS, PlayerCommandHandler, ADMFLAG_CUSTOM1, "FoF Statistics and Ranking: Give points to player (or remove these)");
 	RegConsoleCmd(COMMAND_TOP10, Top10Handler, "FoF Statistics and Ranking: Show ranking list");
-	RegConsoleCmd(COMMAND_RANK, PlayerCommandHandler, "FoF Statistics and Ranking: Show player's ranking and statistics");
+	RegConsoleCmd(COMMAND_RANK, RankCommandHandler, "FoF Statistics and Ranking: Show player's ranking and statistics");
 #if defined DEBUG
 	RegConsoleCmd("sm_stats", DebugCommandHandler, "FoF Statistics and Ranking: Debug command");
 #endif
@@ -363,11 +367,6 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 	if (!IsFakeClient(client)) {
 		new playtime = RoundToZero(GetClientTime(client));
 		g_PlayerSpawnedAt[client] = playtime;
-#if defined DEBUG
-		decl String:msg[255];
-		Format(msg, sizeof(msg), "*** Event_PlayerSpawn ***: client=%d, playtime=%d", client, playtime);
-		LogMessage(msg);
-#endif
 	}
 }
 
@@ -403,7 +402,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 	decl String:msg[255];
 	Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
 		victimId, attackerId, assistId, headshot, weaponIdx, weaponName);
-	LogMessage(msg);
+	//LogMessage(msg);
 #endif
 	
 	// reset victim's killstreak
@@ -446,14 +445,8 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		Format(Sql, sizeof(Sql), SQL_INSERT_WEAPONSTAT_KILLS, g_ServerID, g_PlayerDbId[attackerId], weaponIdx, 
 			g_ServerID, g_PlayerDbId[attackerId], weaponIdx,
 			g_ServerID, g_PlayerDbId[attackerId], weaponIdx, headshotInc, headshotInc);
-#if defined DEBUG
-		PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, rankPoints, g_PlayerDbId[attackerId], g_ServerID);
-#if defined DEBUG
-		PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// increase attacker's killstreak
 		g_PlayerKillstreak[attackerId]++;
@@ -461,9 +454,6 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 			// new personal killstreak record: store it!
 			g_PlayerMaxKillstreak[attackerId] = g_PlayerKillstreak[attackerId];
 			Format(Sql, sizeof(Sql), SQL_UPDATE_KILLSTREAK, g_PlayerMaxKillstreak[attackerId], g_PlayerDbId[attackerId], g_ServerID);
-#if defined DEBUG
-			PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 		// tell attacker about his/her fortune
@@ -478,15 +468,9 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 	if (g_PlayerDbId[assistId] > 0 && g_PointsPerAssist != 0) {
 		// credit points to assisting player
 		Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, g_PointsPerAssist, g_PlayerDbId[assistId], g_ServerID);
-#if defined DEBUG
-		PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// increase kill assists counter
 		Format(Sql, sizeof(Sql), SQL_UPDATE_KILLASSISTS, g_PlayerDbId[assistId], g_ServerID);
-#if defined DEBUG
-		PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// tell assisting player about his/her fortune
 		if (g_PointsPerAssist == 1)
@@ -512,17 +496,46 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
  * Handler for rank list command
  */
 public Action:Top10Handler(client, args) {
- 	
- 	// TODO: Implement the usage of a starting row parameter!
- 	decl String:Sql[SQL_MAX_LENGTH];
- 	Format(Sql, sizeof(Sql), SQL_SELECT_TOP10, 0, 1000);
-#if defined DEBUG
-	PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
- 	SQL_TQuery(g_db, SQL_ShowRanklist, Sql, GetClientUserId(client));
+	
+	decl String:strStartFrom[20];
+	new startFrom = 0;
+	if (args >= 1) {
+		// starting number specified, get it
+		GetCmdArg(1, strStartFrom, sizeof(strStartFrom));
+		startFrom = StringToInt(strStartFrom);
+		if (startFrom < 1) {
+			decl String:strCommand[MAX_NAME_LENGTH];
+			GetCmdArg(0, strCommand, sizeof(strCommand));
+			ReplyToCommand(client, "%t", "CommandReplyTop10", strCommand);
+			return Plugin_Handled;
+		} else
+			startFrom--;
+	}
+	InitRankList(client, startFrom, 1);
  	return Plugin_Handled;
 }
 
+/**
+ * Initializes the ranking list for a given client
+ * This routine is esp. needed to get back from a ranking data panel
+ * ...I did not find a more elegant way... :-(
+ *
+ * @param client 		client id
+ * @param startFrom		start the ranking list from this position
+ * @displayItem			menu pagination will make sure that this item is on the panel
+ *
+ * @noreturn
+ */
+void InitRankList(const client, const int startFrom, const int displayItem) {
+	if (client <= MaxClients)
+		if (IsClientConnected(client) && !IsFakeClient(client)) {
+			g_CurrentMenuState[client][0] = startFrom;
+			g_CurrentMenuState[client][1] = displayItem - 1;
+			decl String:Sql[SQL_MAX_LENGTH];
+		 	Format(Sql, sizeof(Sql), SQL_SELECT_TOP10, startFrom, 500);
+		 	SQL_TQuery(g_db, SQL_ShowRanklist, Sql, GetClientUserId(client));
+		 }
+}
 
 /**
  * Handler for displaying the ranking list
@@ -531,23 +544,27 @@ public SQL_ShowRanklist(Handle:owner, Handle:hndl, const String:error[], any:dat
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		new Handle:menu = CreateMenu(RanklistMenuHandler);
-		SetMenuTitle(menu, "%T", "RanklistTitle", client);
-
+		decl String:menuLine[MAX_NAME_LENGTH + 30];
+		Menu menu = new Menu(RanklistMenuHandler);
+		Format(menuLine, sizeof(menuLine), "%T", "RanklistTitle", client);
+		menu.SetTitle(menuLine);
 		new i = 1;
+		decl String:playerName[MAX_NAME_LENGTH];
+		decl playerId;
+		decl String:item[3 * 8 + 1];
+		decl playerPoints;
 		while (SQL_FetchRow(hndl)) {
-			new String:playerName[MAX_NAME_LENGTH];
-			new String:playerSteamId[STEAMID_LENGTH];
 			SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
-			SQL_FetchString(hndl, 1, playerSteamId, 32);
-			new playerPoints = SQL_FetchInt(hndl, 2);
-			new String:menuLine[MAX_NAME_LENGTH + STEAMID_LENGTH + 30];
-			Format(menuLine, sizeof(menuLine), "%i. %s (%d)", i, playerName, playerPoints);
-			AddMenuItem(menu, playerSteamId, menuLine);
+			playerId = SQL_FetchInt(hndl, 1);
+			playerPoints = SQL_FetchInt(hndl, 2);
+			Format(menuLine, sizeof(menuLine), "%T", "RanklistLine", client, i + g_CurrentMenuState[client][0], playerName, playerPoints);
+			// somehow clumsy way to pass information to the menu handler: store player id, rank and startFrom in item as hex string
+			Format(item, sizeof(item), "%08x%08x%08x", playerId, i, g_CurrentMenuState[client][0]);
+			menu.AddItem(item, menuLine);
 			i++;
 		}
-		SetMenuExitButton(menu, true);
-		DisplayMenuAtItem(menu, client, 1, 60);
+		menu.ExitButton = true;
+		menu.DisplayAt(client, (g_CurrentMenuState[client][1] / 7) * 7, 60);
 		return;
 	}
 }
@@ -555,29 +572,31 @@ public SQL_ShowRanklist(Handle:owner, Handle:hndl, const String:error[], any:dat
 /**
  * Handler for ranking list inputs
  */
-public RanklistMenuHandler(Handle:menu, MenuAction:action, param1, param2)
+public RanklistMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 {
 	// If an option was selected, init the player panel
 	if (action == MenuAction_Select) {
-		new String:info[STEAMID_LENGTH];
+		new String:info[3 * 8 + 1];
 		GetMenuItem(menu, param2, info, sizeof(info));
-		RankPanel(param1, info);
+		if (strlen(info) == 3 * 8) {
+			new startFrom = StringToInt(info[2 * 8], 16);
+			info[2 * 8] = 0;
+			new itemNo = StringToInt(info[8], 16);
+			info[8] = 0;
+			new playerId = StringToInt(info, 16);
+			// store information about coming from ranklist - to get back after closing the ranking panel
+			g_CurrentMenuState[param1][0] = startFrom;
+			g_CurrentMenuState[param1][1] = itemNo;
+#if defined DEBUG
+			PrintToServer("%s+++++ RanklistMenuHandler +++++ / startFrom: %d / itemNo: %d", PLUGIN_LOGPREFIX, startFrom, itemNo); // DEBUG
+#endif
+			decl String:Sql[SQL_MAX_LENGTH];
+			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, itemNo + startFrom, playerId);
+			SQL_TQuery(g_db, SQL_InitRankingPanel, Sql, GetClientUserId(param1));
+		}
 	} else 
 		if (action == MenuAction_End)
-			CloseHandle(menu);
-}
-
-/**
- * Initiate the panel for a player's statistics
- */
-void RankPanel(client, const String:steamid[])
-{
-	decl String:Sql[SQL_MAX_LENGTH];
- 	//Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSTATS, 0, 1000);
-#if defined DEBUG
-	PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
-#endif
- 	//SQL_TQuery(g_db, SQL_ShowRanklist, Sql, GetClientUserId(client));
+			delete menu;
 }
 
 
@@ -769,8 +788,7 @@ public void OnMapStart() {
 
 
 /**
- * Handler for all player related commands. These are: 'sm_chatfilter_reset', 'sm_chatfilter_group',
- * and 'sm_chatfilter_ungroup'. 
+ * Handler for all commands that can affect more than one target.
  * 
  * @param client 	client id
  * @args			Arguments given for the command
@@ -781,30 +799,25 @@ public Action:PlayerCommandHandler(client, args) {
 	// determine command
 	decl String:strTarget[MAX_NAME_LENGTH];
 	GetCmdArg(0, strTarget, sizeof(strTarget));
-	if (strcmp(strTarget, COMMAND_RANK, false) == 0) {
+	if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0) {
 		commandType = 1;
-		if (args > 1)
-			ReplyToCommand(client, "%t", "CommandReplyRank", strTarget);
-	} else if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0) {
-		commandType = 2;
-		if (args != 2)
+		if (args != 2) {
 			ReplyToCommand(client, "%t", "CommandReplyGivePoints", strTarget);
-	} else if (strcmp(strTarget, COMMAND_TOP10, false) == 0) {
-		commandType = 3;
-		if (args > 1)
-			ReplyToCommand(client, "%t", "CommandReplyTop10", strTarget);
+			return Plugin_Handled;
+		}
 	} else 
 		commandType = 0;
 	
-	GetCmdArg(1, strTarget, sizeof(strTarget));
-		
+	if (args >= 1)
+		GetCmdArg(1, strTarget, sizeof(strTarget));
+	
 	new String:targetName[MAX_TARGET_LENGTH];
 	decl targetList[MAXPLAYERS + 1];
 	decl targetCount;
 	new bool:tn_is_ml;
 	if ((targetCount = ProcessTargetString(
 				strTarget, 
-				client, 
+				0, 
 				targetList, 
 				MAXPLAYERS, 
 				COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
@@ -819,11 +832,6 @@ public Action:PlayerCommandHandler(client, args) {
 		for (new i = 0; i < targetCount; i++) {
 			switch (commandType) {
 				case 1: {
-					// COMMAND_RANK
-					new showClient = client;
-					// TODO: Implement it!
-				}
-				case 2: {
 					// COMMAND_GIVEPOINTS
 					new points = StringToInt(param2);
 					if (points == 0 || points < -9999 || points > 9999) {
@@ -844,6 +852,128 @@ public Action:PlayerCommandHandler(client, args) {
 	}
 	return Plugin_Handled;
 }
+
+/**
+ * Handler for sm_rank command
+ * 
+ * @param client 	client id
+ * @args			Arguments given for the command
+ *
+ */
+public Action:RankCommandHandler(client, args) {
+	decl String:strTarget[MAX_NAME_LENGTH];
+	new showClient = client;
+	if (args >= 1) {
+		// target specified, get client id
+		GetCmdArg(1, strTarget, sizeof(strTarget));
+		// target @me doesn't work when ProcessTargetString is performed server side - so replace it!
+		if (strcmp(strTarget, "@me", false) == 0)
+			Format(strTarget, sizeof(strTarget), "#%d", GetClientUserId(client));
+		new String:targetName[MAX_TARGET_LENGTH];
+		decl targetList[MAXPLAYERS + 1];
+		decl targetCount;
+		new bool:tn_is_ml;
+		if ((targetCount = ProcessTargetString(
+			strTarget, 
+			0, 
+			targetList, 
+			MAXPLAYERS, 
+			COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
+			targetName, 
+			sizeof(targetName), 
+			tn_is_ml)) <= 0) {
+			ReplyToTargetError(client, targetCount);
+			return Plugin_Handled;
+		} else 
+			showClient = targetList[0];
+	}
+	if (g_PlayerDbId[showClient] > 0) {
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[showClient], g_PlayerDbId[showClient]);
+		SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
+	}
+	return Plugin_Handled;
+}
+
+/**
+ * Callback after executing SQL / got player id and rank for intitializing a ranking statistics panel
+ */
+public void SQL_GotRankForStatisticsPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	new client = GetClientFromUserID(data, hndl, error);
+	if (client > 0) {
+		new showPlayerId = 0;
+		new rank = -1;
+		if (SQL_FetchRow(hndl)) {
+			showPlayerId = SQL_FetchInt(hndl, 0);
+			rank = SQL_FetchInt(hndl, 1);
+		}
+		g_CurrentMenuState[client][0] = -1;
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, rank, showPlayerId);
+		SQL_TQuery(g_db, SQL_InitRankingPanel, Sql, data);
+	}
+}
+
+/**
+ * Callback after executing SQL / got player rank and stats - now init the panel!
+ */
+public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	new client = GetClientFromUserID(data, hndl, error);
+	if (client > 0) {
+		decl String:playerName[MAX_NAME_LENGTH];
+		SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
+		new kills = SQL_FetchInt(hndl, 5);
+		new deaths = SQL_FetchInt(hndl, 9);
+		new timeAlive = SQL_FetchInt(hndl, 11);
+		
+		decl String:panelLine[MAX_PANELLINE_LENGTH];
+		Panel panel = new Panel();
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Title", client, playerName);
+		panel.SetTitle(panelLine);
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line1", client, SQL_FetchInt(hndl, 2), SQL_FetchInt(hndl, 3));
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line2", client, SQL_FetchInt(hndl, 4));
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line3", client, kills, SQL_FetchInt(hndl, 6));
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line4", client, SQL_FetchInt(hndl, 7));
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line5", client, SQL_FetchInt(hndl, 8));
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line6", client, deaths, SQL_FetchInt(hndl, 10));
+		panel.DrawText(panelLine);
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		float kdRatio = 999.99;
+		if (deaths != 0)
+			kdRatio = FloatDiv(float(kills), float(deaths));
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line7", client, kdRatio);
+		panel.DrawText(panelLine);
+		if (timeAlive > 0) {
+			timeAlive = timeAlive / deaths;
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line8", client, timeAlive / 60, timeAlive % 60);
+			panel.DrawText(panelLine);
+		}
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
+		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
+		panel.Send(client, RankingPanelHandler, 60);
+		delete panel;
+	}
+}
+
+/**
+ * Handler for ranking panel events - restore ranking list menu, if applicable
+ */
+public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int param2)
+{
+	if (g_CurrentMenuState[param1][0] >= 0)
+		InitRankList(param1, g_CurrentMenuState[param1][0], g_CurrentMenuState[param1][1]);
+}
+ 
+
 
 #if defined DEBUG
 /**
@@ -924,8 +1054,8 @@ void ResetPlayer(const client) {
 			g_PlayerSpawnedAt[i] = 0;
 			g_PlayerMaxKillstreak[i] = -1;
 			g_PlayerRank[i] = -1;
-			g_PlayerDbId[client] = -1;
-			g_PlayerPoints[client] = -1;
+			g_PlayerDbId[i] = -1;
+			g_PlayerPoints[i] = -1;
 		}
 	} else if (client >= 0 && client < sizeof(g_PlayerKillstreak)) {
 		g_PlayerKillstreak[client] = 0;

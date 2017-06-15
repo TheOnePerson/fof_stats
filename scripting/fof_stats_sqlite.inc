@@ -82,6 +82,10 @@
 
 #define SQL_SELECT_PLAYERSRANK "SELECT COUNT(PlayerID) FROM PlayerStats WHERE Points >= %i"
 
+// This SQL seems a bit complicated, but it covers multiserver functionality!
+#define SQL_SELECT_PLAYERSRANK2 "SELECT %i, COUNT(PlayerID) FROM (SELECT PlayerID FROM PlayerStats GROUP BY PlayerID \
+	HAVING SUM(Points) > (SELECT SUM(Points) FROM PlayerStats WHERE PlayerID = %i))"
+
 #define SQL_SELECT_TOTALPLAYERS "SELECT COUNT(*) FROM Players"
 
 #define SQL_UPDATE_DEATHS_POINTS "UPDATE PlayerStats SET Deaths = Deaths + 1, \
@@ -103,5 +107,14 @@
 	COALESCE((SELECT Headshots FROM WeaponStats WHERE ServerID = %d and PlayerID = %d and WeaponIdx = %d) + %d, %d) \
 	);"
 
-#define SQL_SELECT_TOP10 "SELECT Name, SteamID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
-	GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(Playtime) DESC, SUM(Logins) LIMIT %d, %d;"
+#define SQL_SELECT_TOP10 "SELECT Name, p.ID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
+	GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(TimeAlive) DESC, SUM(Logins) LIMIT %d, %d;"
+
+#define SQL_SELECT_PLAYERSSTATS "SELECT p.ID, p.Name, %i, (SELECT COUNT(*) FROM Players) TotalPlayers, SUM(s.Points), \
+	COALESCE((SELECT SUM(w.Kills) FROM WeaponStats w WHERE w.PlayerID = p.ID), 0) Kills, \
+	COALESCE((SELECT SUM(w.Headshots) FROM WeaponStats w WHERE w.PlayerID = p.ID), 0) Headshots, \
+	SUM(s.KillAssists) Assists, MAX(s.Killstreak) Streak, \
+	SUM(s.Deaths) Deaths, SUM(s.UngratefulDeaths) Ungrateful, SUM(s.TimeAlive) \
+	FROM Players p INNER JOIN PlayerStats s ON s.PlayerID = p.ID \
+	WHERE p.ID =  %i GROUP BY p.ID;"
+

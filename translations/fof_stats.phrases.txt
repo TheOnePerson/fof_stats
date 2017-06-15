@@ -83,6 +83,67 @@
 		"en"		"Ranking:"
 		"de"		"Rangliste:"
 	}
+	"RanklistLine"
+	{
+		"#format"	"{1:i},{2:s},{3:i}"
+		"en"		"- No. {1}: {2} ({3})"
+		"de"		"- Platz {1}: {2} ({3})"
+	}
+	"RankPanel_Title"
+	{
+		"en"		"%s - Data Sheet"
+		"de"		"%s - Datenblatt"
+	}
+	"RankPanel_WelcomeTitle"
+	{
+		"en"		"Welcome back, %s!"
+		"de"		"Willkommen, %s!"
+	}
+	"RankPanel_Line1"
+	{
+		"en"		"Rank: %i (of %i players)"
+		"de"		"Platz: %i (von %i Spielern)"
+	}
+	"RankPanel_Line2"
+	{
+		"en"		"Points: %i"
+		"de"		"Punkte: %i"
+	}
+	"RankPanel_Line3"
+	{
+		"en"		"Total kills: %i (%i headshots)"
+		"de"		"Kills: %i (%i Kopfschüsse)"
+	}
+	"RankPanel_Line4"
+	{
+		"en"		"Kill assists: %i"
+		"de"		"Unterstützte Kills: %i"
+	}
+	"RankPanel_Line5"
+	{
+		"en"		"Best killstreak: %i"
+		"de"		"Beste Killstreak: %i"
+	}
+	"RankPanel_Line6"
+	{
+		"en"		"Total deaths: %i (%i ungrateful)"
+		"de"		"Anzahl Tode: %i (%i unehrenhaft)"
+	}
+	"RankPanel_Line7"
+	{
+		"en"		"Kill to death ratio: %4.2f"
+		"de"		"Verhältnis Kills zu Tode: %4.2f"
+	}
+	"RankPanel_Line8"
+	{
+		"en"		"Avg. Lifespan: %i mins, %i secs"
+		"de"		"Durchschntl. Lebensdauer: %i Min., %i Sek."
+	}
+	"Close"
+	{
+		"en"		"Close"
+		"de"		"Schließen"
+	}
 	"kick-fall"
 	{
 		"en"		"Kick and Fall"
