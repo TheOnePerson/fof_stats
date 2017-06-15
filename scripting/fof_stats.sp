@@ -1,5 +1,5 @@
 /*
-	Universal Chatfilter
+	Fistful of Frags Ranking and Statistics
 	Written by almostagreatcoder (almostagreatcoder@web.de)
 
 	Licensed under the GPLv3
@@ -35,8 +35,8 @@
 
 /**
  * TODO: proper welcome message (introducing the main rank commands)
+ * TODO: Play "\sound\player\voice\brag_bestinwest.wav" when #1 connects/enters (or "\sound\player\voice\howl_yeehaw2.wav" or "\sound\monastery\bell.wav")
  * TODO: play sound, if #1 connects
- * TODO: refactor playtime tracking, doesn't work currently
  * TODO: actualize config file, there are weapons missing
  */
 
@@ -57,7 +57,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Statistics and Ranking"
-#define PLUGIN_VERSION 		"0.0.1"
+#define PLUGIN_VERSION 		"0.0.2"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
@@ -119,6 +119,7 @@ new Handle:g_WeaponDetails = INVALID_HANDLE;		// list of arrays holding the poin
 new g_PlayerMaxKillstreak[MAXPLAYERS + 1];		// array for storing max killstreak of players (easier to handle than always requesting from db)
 new g_PlayerKillstreak[MAXPLAYERS + 1];			// array for current killstreak of players
 new g_PlayerRank[MAXPLAYERS + 1];
+new g_PlayerSpawnedAt[MAXPLAYERS + 1];			// array for keeping track of the time alive of a player
 new g_PlayerPoints[MAXPLAYERS + 1];
 new g_PlayerDbId[MAXPLAYERS + 1];
 new bool:g_PlayerSilentInit[MAXPLAYERS + 1];	// array to determine if player data should be loaded silently during plugin startup
@@ -165,7 +166,8 @@ public OnPluginStart() {
 	
 	// Hook events
 	HookEvent("player_death", Event_PlayerDeath);
-	
+	HookEvent("player_spawn", Event_PlayerSpawn);
+	HookEvent("round_end", Event_RoundEnd);
 }
 
 public OnPluginEnd() {
@@ -345,9 +347,44 @@ public void SQL_SelectTotalPlayers(Handle:owner, Handle:hndl, const String:error
 	}
 }
 
+/**
+ * Clean up on disconnecting clients
+ */
 public OnClientDisconnect(client) {
-	if (client <= MAXPLAYERS)
+	if (client <= MaxClients)
 		ResetPlayer(client);
+}
+
+/**
+ * Event Handler for PlayerSpawn (store the ClientTime to be able to determine average time alive)
+ */
+public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (!IsFakeClient(client)) {
+		new playtime = RoundToZero(GetClientTime(client));
+		g_PlayerSpawnedAt[client] = playtime;
+#if defined DEBUG
+		decl String:msg[255];
+		Format(msg, sizeof(msg), "*** Event_PlayerSpawn ***: client=%d, playtime=%d", client, playtime);
+		LogMessage(msg);
+#endif
+	}
+}
+
+/**
+ * Event Handler for RoundEnd (store the times alive in database)
+ */
+public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
+	for (new i = 0; i <= MaxClients; i++) {
+		if (!IsFakeClient(i)) {
+			if (g_PlayerDbId[i] > 0 && g_PlayerSpawnedAt[i] > 0) {
+				decl String:Sql[SQL_MAX_LENGTH];
+				Format(Sql, sizeof(Sql), SQL_UPDATE_TIMEALIVE, RoundToZero(GetClientTime(i)) - g_PlayerSpawnedAt[i], g_PlayerDbId[i], g_ServerID);
+				SQL_TQuery(g_db, SQL_LogError, Sql);
+			}
+			g_PlayerSpawnedAt[i] = 0;
+		}
+	}
 }
 
 /**
@@ -364,7 +401,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 	
 #if defined DEBUG
 	decl String:msg[255];
-	Format(msg, sizeof(msg), "Event_PlayerDeath: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
+	Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
 		victimId, attackerId, assistId, headshot, weaponIdx, weaponName);
 	LogMessage(msg);
 #endif
@@ -376,7 +413,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 	assistId = GetClientOfUserId(assistId);
 	if (g_PlayerDbId[victimId] > 0) {
 		g_PlayerKillstreak[victimId] = 0;
-		// increase victim's death counter and substract points
+		// increase victim's death counter, store time alive and substract points
 		new penaltyPoints = g_PointsPerDeath;
 		new ungrateful = 0;
 		if (weaponIdx == -1 || victimId == attackerId) {
@@ -384,16 +421,19 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 			penaltyPoints = g_PointsPerUngratefulDeath;
 			ungrateful = 1;
 		}
-		Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungrateful, penaltyPoints, g_PlayerDbId[victimId], g_ServerID);
+		new timeAlive = RoundToZero(GetClientTime(victimId)) - g_PlayerSpawnedAt[victimId];
+		g_PlayerSpawnedAt[victimId] = 0;
+		Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungrateful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// tell victim about his/her misery (in case there are points to loose)
 		if (penaltyPoints != 0)
 			if (ungrateful > 0)
 				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngratefulDeathMessage", -penaltyPoints);
-				//PrintToChat(victimId, "%t", "UngratefulDeathMessage", -penaltyPoints);
-			else
-				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints);
-				//PrintToChat(victimId, "%t", "DeathMessage", -penaltyPoints);
+			else {
+				decl String:attackerName[MAX_NAME_LENGTH];
+				GetClientName(attackerId, attackerName, sizeof(attackerName));
+				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints, attackerName);
+			}
 	}
 	if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId) {
 		// find the weapon data and give points to attacker
@@ -507,7 +547,7 @@ public SQL_ShowRanklist(Handle:owner, Handle:hndl, const String:error[], any:dat
 			i++;
 		}
 		SetMenuExitButton(menu, true);
-		DisplayMenu(menu, client, 60);
+		DisplayMenuAtItem(menu, client, 1, 60);
 		return;
 	}
 }
@@ -517,7 +557,7 @@ public SQL_ShowRanklist(Handle:owner, Handle:hndl, const String:error[], any:dat
  */
 public RanklistMenuHandler(Handle:menu, MenuAction:action, param1, param2)
 {
-	// If an option was selected, tell the client about the player
+	// If an option was selected, init the player panel
 	if (action == MenuAction_Select) {
 		new String:info[STEAMID_LENGTH];
 		GetMenuItem(menu, param2, info, sizeof(info));
@@ -722,32 +762,9 @@ public Config_End(Handle:parser, bool:halted, bool:failed) {
 public void OnMapStart() {
 	// reset all player data
 	ResetPlayer(0);
-	// start the timer for tracking the playtime
-	CreateTimer(60.0, Timer_Playtime, TIMER_REPEAT + TIMER_FLAG_NO_MAPCHANGE);
-}
-
-
-/**
- * Handler for keeping track of the players playtimes. 
- * 
- * @param timer 		handle for the timer
- * @param client		client id
- */
-public Action:Timer_Playtime(Handle:timer) {
-	// increment the playtime of all current players
-	new String:playerIDs[(MAXPLAYERS + 1) * 10] = "";
-	for (new i = 1; i < MaxClients; i++) 
-		if (IsClientInGame(i) && !IsFakeClient(i) && g_PlayerDbId[i] > 0)
-			Format(playerIDs[strlen(playerIDs)], 10, "%d,", g_PlayerDbId[i]);
-	if (strlen(playerIDs) > 0) {
-		playerIDs[strlen(playerIDs) - 1] = 0;
-		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_UPDATE_PLAYTIME, 60, playerIDs, g_ServerID);
 #if defined DEBUG
-		PrintToServer("%sExecuting SQL: %s", PLUGIN_LOGPREFIX, Sql); // DEBUG
+	PrintToServer("%s*** Resetting all Players! ***", PLUGIN_LOGPREFIX);
 #endif
-		SQL_TQuery(g_db, SQL_LogError, Sql);
-	}
 }
 
 
@@ -764,60 +781,62 @@ public Action:PlayerCommandHandler(client, args) {
 	// determine command
 	decl String:strTarget[MAX_NAME_LENGTH];
 	GetCmdArg(0, strTarget, sizeof(strTarget));
-	if (strcmp(strTarget, COMMAND_RANK, false) == 0)
+	if (strcmp(strTarget, COMMAND_RANK, false) == 0) {
 		commandType = 1;
-	else if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0)
+		if (args > 1)
+			ReplyToCommand(client, "%t", "CommandReplyRank", strTarget);
+	} else if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0) {
 		commandType = 2;
-	else 
+		if (args != 2)
+			ReplyToCommand(client, "%t", "CommandReplyGivePoints", strTarget);
+	} else if (strcmp(strTarget, COMMAND_TOP10, false) == 0) {
+		commandType = 3;
+		if (args > 1)
+			ReplyToCommand(client, "%t", "CommandReplyTop10", strTarget);
+	} else 
 		commandType = 0;
 	
-	if (args != 2 && commandType == 2)
-		ReplyToCommand(client, "%sUsage: %s <name|#userid> [<points>]", PLUGIN_PREFIX, strTarget);
-	else if (args > 1 && commandType == 1)
-		ReplyToCommand(client, "%sUsage: %s [<name|#userid>]", PLUGIN_PREFIX, strTarget);
-	else {
-		GetCmdArg(1, strTarget, sizeof(strTarget));
+	GetCmdArg(1, strTarget, sizeof(strTarget));
 		
-		new String:targetName[MAX_TARGET_LENGTH];
-		decl targetList[MAXPLAYERS + 1];
-		decl targetCount;
-		new bool:tn_is_ml;
-		if ((targetCount = ProcessTargetString(
-					strTarget, 
-					client, 
-					targetList, 
-					MAXPLAYERS, 
-					COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
-					targetName, 
-					sizeof(targetName), 
-					tn_is_ml)) <= 0) {
-			ReplyToTargetError(client, targetCount);
-		} else {
-			decl String:param2[MAX_TARGET_LENGTH];
-			if (args >= 2)
-				GetCmdArg(2, param2, sizeof(param2));
-			for (new i = 0; i < targetCount; i++) {
-				switch (commandType) {
-					case 1: {
-						// COMMAND_RANK
-						new showClient = client;
+	new String:targetName[MAX_TARGET_LENGTH];
+	decl targetList[MAXPLAYERS + 1];
+	decl targetCount;
+	new bool:tn_is_ml;
+	if ((targetCount = ProcessTargetString(
+				strTarget, 
+				client, 
+				targetList, 
+				MAXPLAYERS, 
+				COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
+				targetName, 
+				sizeof(targetName), 
+				tn_is_ml)) <= 0) {
+		ReplyToTargetError(client, targetCount);
+	} else {
+		decl String:param2[MAX_TARGET_LENGTH];
+		if (args >= 2)
+			GetCmdArg(2, param2, sizeof(param2));
+		for (new i = 0; i < targetCount; i++) {
+			switch (commandType) {
+				case 1: {
+					// COMMAND_RANK
+					new showClient = client;
+					// TODO: Implement it!
+				}
+				case 2: {
+					// COMMAND_GIVEPOINTS
+					new points = StringToInt(param2);
+					if (points == 0 || points < -9999 || points > 9999) {
+						ReplyToCommand(client, "%sAmount of ranking points must be in the range between -9999 and +9999", PLUGIN_PREFIX);
+					} else {
 						// TODO: Implement it!
-					}
-					case 2: {
-						// COMMAND_GIVEPOINTS
-						new points = StringToInt(param2);
-						if (points == 0 || points < -9999 || points > 9999) {
-							ReplyToCommand(client, "%sAmount of ranking points must be in the range between -9999 and +9999", PLUGIN_PREFIX);
-						} else {
-							// TODO: Implement it!
-							decl String:word[10];
-							if (points < 0) {
-								word = "decreased";
-								points = -points;
-							} else
-								word = "increased";
-							ReplyToCommand(client, "%s%N's ranking points have been %s by %d.", PLUGIN_PREFIX, targetList[i], word, points);
-						}
+						decl String:word[10];
+						if (points < 0) {
+							word = "decreased";
+							points = -points;
+						} else
+							word = "increased";
+						ReplyToCommand(client, "%s%N's ranking points have been %s by %d.", PLUGIN_PREFIX, targetList[i], word, points);
 					}
 				}
 			}
@@ -851,28 +870,6 @@ public Action:DebugCommandHandler(client, args) {
 // Private functions
 //
 
-
-/** 
- * Charges the penalty points contained in the g_MatchedSections array to a client
- * and increments the hit counter. The client's cookie is NOT set here.
- *
- * @param client				client id
- * @param penalty				penalty points to be charged
- * @noreturn
- */
-void ChargePoints(const client) {
-	g_PlayerHits[client] += 1;
-	new max = GetArraySize(g_MatchedSections);
-	decl thisPP[MAXPLAYERS + 1];
-	for (new i = 0; i < max; i++) {
-		// somewhat tricky: first copy the needed config section information into g_currentSection
-		GetArrayArray(g_ConfigSections, GetArrayCell(g_MatchedSections, i), g_currentSection[0]);
-		// then get the right penalty pointer arry, modify it and write it back
-		GetArrayArray(g_PlayerPenaltyPoints, g_currentSection[cs_actionGroupIdx], thisPP[0]);
-		thisPP[client] += g_currentSection[cs_penalty];
-		SetArrayArray(g_PlayerPenaltyPoints, g_currentSection[cs_actionGroupIdx], thisPP[0]);
-	}
-}
 
 /** 
  * Finds the correct kill or headshot points to a given weapon idx.
@@ -924,6 +921,7 @@ void ResetPlayer(const client) {
 		decl i;
 		for (i = 0; i < sizeof(g_PlayerKillstreak); i++) {
 			g_PlayerKillstreak[i] = 0;
+			g_PlayerSpawnedAt[i] = 0;
 			g_PlayerMaxKillstreak[i] = -1;
 			g_PlayerRank[i] = -1;
 			g_PlayerDbId[client] = -1;
@@ -931,6 +929,7 @@ void ResetPlayer(const client) {
 		}
 	} else if (client >= 0 && client < sizeof(g_PlayerKillstreak)) {
 		g_PlayerKillstreak[client] = 0;
+		g_PlayerSpawnedAt[client] = 0;
 		g_PlayerMaxKillstreak[client] = -1;
 		g_PlayerRank[client] = -1;
 		g_PlayerDbId[client] = -1;

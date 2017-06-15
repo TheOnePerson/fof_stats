@@ -29,7 +29,7 @@
 	\"UngratefulDeaths\"  INTEGER NOT NULL DEFAULT 0,  \
 	\"Killstreak\"  INTEGER NOT NULL DEFAULT 0,  \
 	\"KillAssists\"  INTEGER NOT NULL DEFAULT 0,  \
-	\"Playtime\"  INTEGER NOT NULL DEFAULT 0,  \
+	\"TimeAlive\"  INTEGER NOT NULL DEFAULT 0,  \
 	\"Firstenter\"  INTEGER NOT NULL DEFAULT 0,  \
 	\"Lastenter\"  INTEGER NOT NULL DEFAULT 0,  \
 	PRIMARY KEY (\"PlayerID\" ASC, \"ServerID\" ASC)  \
@@ -64,14 +64,14 @@
 
 #define SQL_SELECT_PLAYERID "SELECT ID FROM Players WHERE SteamID = '%s'"
 
-#define SQL_INSERT_PLAYERSTAT "INSERT OR REPLACE INTO PlayerStats(PlayerID, ServerID, Logins, Points, Deaths, UngratefulDeaths, Killstreak, KillAssists, Playtime, Firstenter, Lastenter) \
+#define SQL_INSERT_PLAYERSTAT "INSERT OR REPLACE INTO PlayerStats(PlayerID, ServerID, Logins, Points, Deaths, UngratefulDeaths, Killstreak, KillAssists, TimeAlive, Firstenter, Lastenter) \
 	VALUES (%d, %d, COALESCE((SELECT Logins FROM PlayerStats WHERE PlayerID = %d and ServerID = %d) + %d, 1), \
 	(SELECT Points FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
 	(SELECT Deaths FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
 	(SELECT UngratefulDeaths FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
 	(SELECT Killstreak FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
 	(SELECT KillAssists FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
-	(SELECT Playtime FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
+	(SELECT TimeAlive FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), \
 	COALESCE((SELECT Firstenter FROM PlayerStats WHERE PlayerID = %d and ServerID = %d), %d), \
 	%d \
 	);"
@@ -84,9 +84,13 @@
 
 #define SQL_SELECT_TOTALPLAYERS "SELECT COUNT(*) FROM Players"
 
-#define SQL_UPDATE_DEATHS_POINTS "UPDATE PlayerStats SET Deaths = Deaths + 1, UngratefulDeaths = UngratefulDeaths + %d, Points = Points + (%d) WHERE PlayerID = %d and ServerID = %d;"
+#define SQL_UPDATE_DEATHS_POINTS "UPDATE PlayerStats SET Deaths = Deaths + 1, \
+	UngratefulDeaths = UngratefulDeaths + %d, \
+	Points = Points + (%d), \
+	TimeAlive = TimeAlive + (%d) \
+	WHERE PlayerID = %d and ServerID = %d;"
 
-#define SQL_UPDATE_PLAYTIME "UPDATE PlayerStats SET Playtime = Playtime + %d WHERE PlayerID IN (%s) and ServerID = %d;"
+#define SQL_UPDATE_TIMEALIVE "UPDATE PlayerStats SET TimeAlive = TimeAlive + %d WHERE PlayerID = %d and ServerID = %d;"
 
 #define SQL_UPDATE_POINTS "UPDATE PlayerStats SET Points = Points + (%d) WHERE PlayerID = %d and ServerID = %d;"
 
@@ -100,4 +104,4 @@
 	);"
 
 #define SQL_SELECT_TOP10 "SELECT Name, SteamID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
-	GROUP BY p.ID ORDER BY SUM(Points)DESC, SUM(Playtime)DESC, SUM(Logins) LIMIT %d, %d;"
+	GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(Playtime) DESC, SUM(Logins) LIMIT %d, %d;"
