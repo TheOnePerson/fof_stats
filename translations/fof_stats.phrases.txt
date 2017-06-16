@@ -104,8 +104,8 @@
 	}
 	"RanklistTitle"
 	{
-		"en"		"Ranking:"
-		"de"		"Rangliste:"
+		"en"		"Ranking: (%i players)"
+		"de"		"Rangliste: (%i Spieler)"
 	}
 	"RanklistLine"
 	{
@@ -121,7 +121,7 @@
 	"RankPanel_WelcomeTitle"
 	{
 		"en"		"Welcome back, %s!"
-		"de"		"Willkommen, %s!"
+		"de"		"Willkommen zurück, %s!"
 	}
 	"RankPanel_Line1"
 	{
@@ -156,7 +156,7 @@
 	"RankPanel_Line7"
 	{
 		"en"		"Lifetime in game: %i hrs, %i mins"
-		"de"		"Zeit im Spiel: %i Std, %i Min."
+		"de"		"Zeit im Spiel: %i Std., %i Min."
 	}
 	"RankPanel_Line8"
 	{
@@ -167,6 +167,37 @@
 	{
 		"en"		"Kill to death ratio: %4.2f"
 		"de"		"Verhältnis Kills zu Tode: %4.2f"
+	}
+	"ExplainPanel_WelcomeTitle"
+	{
+		"en"		"Welcome, %s!"
+		"de"		"Willkommen, %s!"
+	}
+	"ExplainPanel_Line1"
+	{
+		"en"		"There are currently %i players in the ranking list."
+		"de"		"Es gibt aktuell %i Spieler in der Rangliste."
+	}
+	"ExplainPanel_Line2"
+	{
+		"en"		"Here are the top 3:"
+		"de"		"Hier die Top 3:"
+	}
+	"ExplainPanel_Rankline"
+	{
+		"#format"	"{1:i},{2:s},{3:i}"
+		"en"		"No. {1}: {2} ({3})"
+		"de"		"Platz {1}: {2} ({3})"
+	}
+	"ExplainPanel_Line3"
+	{
+		"en"		"Say '%s' to view the ranking list."
+		"de"		"Sage '!%s', um die Rangliste anzuzeigen."
+	}
+	"ExplainPanel_Line4"
+	{
+		"en"		"Say '%s' to view your own or other's ranking data."
+		"de"		"Sage '!%s', um deine oder fremde Ranglistendaten anzuzeigen."
 	}
 	"Close"
 	{
