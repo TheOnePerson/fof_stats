@@ -106,6 +106,8 @@
 
 #define SQL_UPDATE_TIMEALIVE "UPDATE PlayerStats SET TimeAlive = TimeAlive + %d WHERE PlayerID = %d and ServerID = %d;"
 
+#define SQL_UPDATE_POINTS_ABSOLUTE "UPDATE PlayerStats Points = (%d) WHERE PlayerID = %d and ServerID = %d;"
+
 #define SQL_UPDATE_POINTS "UPDATE PlayerStats SET Points = Points + (%d) WHERE PlayerID = %d and ServerID = %d;"
 
 #define SQL_UPDATE_KILLSTREAK "UPDATE PlayerStats SET Killstreak = %d WHERE PlayerID = %d and ServerID = %d;"

@@ -57,7 +57,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Statistics and Ranking"
-#define PLUGIN_VERSION 		"0.4.0"
+#define PLUGIN_VERSION 		"0.4.5"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
@@ -80,7 +80,7 @@
 #define COMMAND_TOP10 "sm_top10"
 #define COMMAND_RANK "sm_rank"
 #define COMMAND_RELOAD "sm_rank_reload"
-#define COMMAND_GIVEPOINTS "sm_rank_givepoints"
+#define COMMAND_GIVEPOINTS "sm_givepoints"
 
 #define CVAR_VERSION "sm_stats_version"
 
@@ -378,9 +378,6 @@ public void SQL_GotTotalPlayers(Handle:owner, Handle:hndl, const String:error[],
  */
 public OnClientDisconnect(client) {
 	if (client <= MaxClients) {
-#if defined DEBUG
-		PrintToServer("%s+++++ Disconnecting client %d +++++", PLUGIN_LOGPREFIX, client); // DEBUG
-#endif
 		ResetPlayer(client);
 	}
 }
@@ -883,7 +880,7 @@ public Action:PlayerCommandHandler(client, args) {
 	if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0) {
 		commandType = 1;
 		if (args != 2) {
-			ReplyToCommand(client, "%t", "CommandReplyGivePoints", strTarget);
+			ReplyToCommand(client, "%t", "CommandReplyGivePoints", strTarget, strTarget);
 			return Plugin_Handled;
 		}
 	} else 
@@ -898,7 +895,7 @@ public Action:PlayerCommandHandler(client, args) {
 	new bool:tn_is_ml;
 	if ((targetCount = ProcessTargetString(
 				strTarget, 
-				0, 
+				client, 
 				targetList, 
 				MAXPLAYERS, 
 				COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
@@ -914,18 +911,37 @@ public Action:PlayerCommandHandler(client, args) {
 			switch (commandType) {
 				case 1: {
 					// COMMAND_GIVEPOINTS
-					new points = StringToInt(param2);
-					if (points == 0 || points < -9999 || points > 9999) {
-						ReplyToCommand(client, "%sAmount of ranking points must be in the range between -9999 and +9999", PLUGIN_PREFIX);
+					decl points;
+					if (param2[0] == '=') {
+						// set points to a certain value
+						points = StringToInt(param2[1]);
+						commandType = 0;
+					} else
+						// increase or decrease points
+						points = StringToInt(param2);
+					new minPoints = -999999;
+					new maxPoints = 999999;
+					if (points == 0 || points < minPoints || points > maxPoints) {
+						ReplyToCommand(client, "%t", "CommandReplyGivePoints2", minPoints, maxPoints);
 					} else {
-						// TODO: Implement it!
-						decl String:word[10];
-						if (points < 0) {
-							word = "decreased";
-							points = -points;
+						// now do it
+						GetClientName(targetList[i], strTarget, sizeof(strTarget));
+						if (g_PlayerDbId[targetList[i]] > 0) {
+							decl String:Sql[SQL_MAX_LENGTH];
+							if (commandType == 0)
+								Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS_ABSOLUTE, points, g_PlayerDbId[targetList[i]], g_ServerID);
+							else
+								Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, points, g_PlayerDbId[targetList[i]], g_ServerID);
+							SQL_TQuery(g_db, SQL_LogError, Sql);
+							if (commandType == 0)
+								ReplyToCommand(client, "%t", "CommandResultGivePointsAbs", strTarget, points);
+							else
+								if (points < 0)
+									ReplyToCommand(client, "%t", "CommandResultGivePointsDec", strTarget, -points);
+								else
+									ReplyToCommand(client, "%t", "CommandResultGivePointsInc", strTarget, points);
 						} else
-							word = "increased";
-						ReplyToCommand(client, "%s%N's ranking points have been %s by %d.", PLUGIN_PREFIX, targetList[i], word, points);
+							ReplyToCommand(client, "%t", "CommandReplyGivePoints3", strTarget);
 					}
 				}
 			}
@@ -1103,11 +1119,15 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 		}
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		new String:command[51] = COMMAND_TOP10;
-		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line3", client, command[3]);
 		ReplaceString(command, sizeof(command), "sm_", "", false);
+		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line3", client, command[3]);
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line4", client, command[3]);
 		panel.DrawText(panelLine);
 		strcopy(command, sizeof(command), COMMAND_RANK);
-		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line4", client, command[3]);
+		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line5", client, command[3]);
+		panel.DrawText(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line6", client, command[3]);
 		panel.DrawText(panelLine);
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);

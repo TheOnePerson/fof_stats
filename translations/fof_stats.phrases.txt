@@ -16,7 +16,30 @@
 	}
 	"CommandReplyGivePoints"
 	{
-		"en"		"Usage: %s <name|#userid> <points>\nGive <points> to user(s). To set the points to a certain value, use this: %s <name|#userid> =<points>!"
+		"en"		"Usage: %s <name|#userid> <points>\nGive <points> to user(s). To set the points to a certain value, use this: %s <name|#userid> =<points>"
+	}
+	"CommandReplyGivePoints2"
+	{
+		"en"		"Cannot execute command: amount of ranking points must be between %d and %d!"
+	}
+	"CommandReplyGivePoints3"
+	{
+		"en"		"Cannot execute command: Cannot find '%s' in database!"
+	}
+	"CommandResultGivePointsAbs"
+	{
+		"en"		"Points of '%s' successfully set to %d."
+		"de"		"%s's Punkte wurden erfolgreich auf %d gesetzt."
+	}
+	"CommandResultGivePointsInc"
+	{
+		"en"		"Points of '%s' successfully increased by %d."
+		"de"		"%s's Punkte wurden erfolgreich um %d erhöht."
+	}
+	"CommandResultGivePointsDec"
+	{
+		"en"		"Points of '%s' successfully decreased by %d."
+		"de"		"%s's Punkte wurden erfolgreich um %d erniedrigt."
 	}
 	"CommandReplyRank"
 	{
@@ -196,8 +219,18 @@
 	}
 	"ExplainPanel_Line4"
 	{
-		"en"		"Say '%s' to view your own or other's ranking data."
-		"de"		"Sage '!%s', um deine oder fremde Ranglistendaten anzuzeigen."
+		"en"		"Say '%s N' to view the ranking list starting from pos. N."
+		"de"		"Sage '!%s N', um die Liste ab Platz N anzuzeigen."
+	}
+	"ExplainPanel_Line5"
+	{
+		"en"		"Say '%s' to view your own ranking data."
+		"de"		"Sage '!%s', um deine Ranglistendaten anzuzeigen."
+	}
+	"ExplainPanel_Line6"
+	{
+		"en"		"Say '%s PLAYERNAME' to view the data of that player."
+		"de"		"Sage '!%s NAME', um die Daten von NAME anzuzeigen."
 	}
 	"Close"
 	{
