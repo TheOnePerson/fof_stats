@@ -22,17 +22,41 @@
 	{
 		"en"		"Usage: %s <name|#userid>\nShows own rank and statistics or those of the given player."
 	}
-	"WelcomeWithCountry"
+	"AnnounceWithRankAndCountry"
 	{
-		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i}"
-		"en"		"{1} connected from {2}!\n[Ranked: #{3} out of {4} players with {5} Points!]"
-		"de"		"{1} aus {2} verbunden!\n[Ranglistenplatz {3} (von {4}) mit {5} Punkten!]"
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s},{8:s},{9:s}"
+		"en"		"{6}{1}{7} connected from {2}!\n[{8}Ranked: #{3}{9} out of {4} players with {5} Points!]"
+		"de"		"{6}{1}{7} aus {2} verbunden!\n[{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!]"
 	}
-	"WelcomeWithoutCountry"
+	"AnnounceWithRankAndCountryNo1"
 	{
-		"#format"	"{1:s},{2:i},{3:i},{4:i}"
-		"en"		"{1} connected!\n[Ranked: #{2} out of {3} players with {4} Points!]"
-		"de"		"{1} verbunden!\n[Ranglistenplatz {2} (von {3}) mit {4} Punkten!]"
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s}{8:s},{9:s},{10:s}"
+		"en"		"{10}Buckle up! The No. 1 is coming!\n{6}{1}{7} connected from {2}!\n[{8}Ranked: #{3}{9} out of {4} players with {5} Points!]"
+		"de"		"{10}Schnallt euch an! Die Nummer 1 kommt!\n{6}{1}{7} aus {2} verbunden!\n[{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!]"
+	}
+	"AnnounceWithCountry"
+	{
+		"#format"	"{1:s},{2:s},{3:s},{4:s}"
+		"en"		"{3}{1}{4} connected from {2}!"
+		"de"		"{3}{1}{4} aus {2} verbunden!"
+	}
+	"AnnounceWithRank"
+	{
+		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
+		"en"		"{5}{1}{6} connected!\n[{7}Ranked: #{2}{8} out of {3} players with {4} Points!]"
+		"de"		"{5}{1}{6} verbunden!\n[{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!]"
+	}
+	"AnnounceWithRankNo1"
+	{
+		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s}"
+		"en"		"{9}Buckle up! The No. 1 is coming!\n{5}{1}{6} connected!\n[{7}Ranked: #{2}{8} out of {3} players with {4} Points!]"
+		"de"		"{9}Schnallt euch an! Die Nummer 1 kommt!\n{5}{1}{6} verbunden!\n[{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!]"
+	}
+	"Announce"
+	{
+		"#format"	"{1:s},{2:s},{3:s}"
+		"en"		"{2}{1}{3} connected!"
+		"de"		"{2}{1}{3} verbunden!"
 	}
 	"ConfigReloaded"
 	{
@@ -50,10 +74,10 @@
 		"en"		"You loose {1} points for being killed."
 		"de"		"Du wurdest getötet und verlierst {1} Punkte."
 	}
-	"UngratefulDeathMessage"
+	"UngracefulDeathMessage"
 	{
-		"en"		"Ungrateful death: you loose %d points."
-		"de"		"Ehrloser Tod: Dir werden %d Punkte abgezogen."
+		"en"		"Ungraceful death: you loose %d points."
+		"de"		"Unwürdiger Tod: Dir werden %d Punkte abgezogen."
 	}
 	"KillMessage"
 	{
@@ -126,18 +150,23 @@
 	}
 	"RankPanel_Line6"
 	{
-		"en"		"Total deaths: %i (%i ungrateful)"
-		"de"		"Anzahl Tode: %i (%i unehrenhaft)"
+		"en"		"Total deaths: %i (%i ungraceful)"
+		"de"		"Anzahl Tode: %i (%i unwürdig)"
 	}
 	"RankPanel_Line7"
 	{
-		"en"		"Kill to death ratio: %4.2f"
-		"de"		"Verhältnis Kills zu Tode: %4.2f"
+		"en"		"Lifetime in game: %i hrs, %i mins"
+		"de"		"Zeit im Spiel: %i Std, %i Min."
 	}
 	"RankPanel_Line8"
 	{
 		"en"		"Avg. Lifespan: %i mins, %i secs"
 		"de"		"Durchschntl. Lebensdauer: %i Min., %i Sek."
+	}
+	"RankPanel_Line9"
+	{
+		"en"		"Kill to death ratio: %4.2f"
+		"de"		"Verhältnis Kills zu Tode: %4.2f"
 	}
 	"Close"
 	{

@@ -39,7 +39,7 @@
  * TODO: play sound, if #1 connects
  * TODO: implement Active-Flag for players
  * TODO: implement killstreak top 10
- * TODO: actualize config file, there are weapons missing
+ * TODO: actualize config file, there are weapons missing!
  */
 
 /*
@@ -59,7 +59,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Statistics and Ranking"
-#define PLUGIN_VERSION 		"0.2.0"
+#define PLUGIN_VERSION 		"0.3.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
@@ -110,37 +110,32 @@ enum enumConfigWeaponDetails
 	cs_PointsPerHeadshot
 };
 
-#if defined DEBUG
-	char dbgchar;
-	char dbgchar2;
-#endif
-
 // global dynamic arrays
 new Handle:g_WeaponDetails = INVALID_HANDLE;		// list of arrays holding the points per weapon
 
 // global static arrays
 new g_PlayerMaxKillstreak[MAXPLAYERS + 1];		// array for storing max killstreak of players (easier to handle than always requesting from db)
 new g_PlayerKillstreak[MAXPLAYERS + 1];			// array for current killstreak of players
-new g_PlayerRank[MAXPLAYERS + 1];
+new g_PlayerPreviousLogin[MAXPLAYERS + 1];				// needed for welcome panel on spawns
 new g_PlayerSpawnedAt[MAXPLAYERS + 1];			// array for keeping track of the time alive of a player
-new g_PlayerPoints[MAXPLAYERS + 1];
 new g_CurrentMenuState[MAXPLAYERS + 1][2];		// for storing the state of the ranking list menu when a ranking panel is displayed as a sub menu
 new g_PlayerDbId[MAXPLAYERS + 1];
 new bool:g_PlayerSilentInit[MAXPLAYERS + 1];	// array to determine if player data should be loaded silently during plugin startup
 
 // other global vars
-new String:g_LastError[255];	// needed for config file parsing and logging: holds the last error message
-new Handle:g_db = INVALID_HANDLE;	// database connection
-new g_SectionDepth;	// for config file parsing: keeps track of the nesting level of sections
-new g_ConfigLine;	// for config file parsing: keeps track of the current line number
+new String:g_LastError[255];					// needed for config file parsing and logging: holds the last error message
+new Handle:g_db = INVALID_HANDLE;				// database connection
+new g_SectionDepth;								// for config file parsing: keeps track of the nesting level of sections
+new g_ConfigLine;								// for config file parsing: keeps track of the current line number
 new g_currentWeaponConfig[enumConfigWeaponDetails];
 
-new g_ServerID = 1;	// ID of the current server (normally 1)
+new g_ServerID = 1;								// ID of the current server (normally 1)
+new g_MaxIdleSecs = 60 * 24 * 60 * 60;
 new g_DefaultPointsPerKill = 3;
 new g_DefaultPointsPerHeadshot = 5;
 new g_PointsPerAssist = 1;
 new g_PointsPerDeath = -2;
-new g_PointsPerUngratefulDeath = -4;
+new g_PointsPerUngracefulDeath = -4;
 
 
 //
@@ -193,21 +188,19 @@ public void OnConfigsExecuted() {
 			OnClientPostAdminCheck(i);
 		else
 			ResetPlayer(i);
-	
-#if defined DEBUG
-	PrintToServer("%sPlugin loaded, configs processed", PLUGIN_LOGPREFIX); // DEBUG
-#endif
 }
 
+/**
+ * Handler for connecting clients
+ */
 public void OnClientPostAdminCheck(client) {
-	if (client <= MAXPLAYERS && !IsFakeClient(client)) {
+	if (client <= MaxClients && !IsFakeClient(client)) {
 #if defined DEBUG
 		PrintToServer("%sConnecting client id %d...", PLUGIN_LOGPREFIX, client); // DEBUG
 #endif
 		g_PlayerKillstreak[client] = 0;		// should already be 0, but who knows...
 		g_PlayerMaxKillstreak[client] = 0;
-		g_PlayerRank[client] = 0;
-		g_PlayerPoints[client] = 0;
+		g_PlayerPreviousLogin[client] = 0;
 		if (g_db != INVALID_HANDLE) {
 			// Add player entry to db
 			decl String:playerName[MAX_NAME_LENGTH];
@@ -230,7 +223,7 @@ public void OnClientPostAdminCheck(client) {
 }
 
 /**
- * Callback after executing SQL 'select player ID' / store DB id in local array and update player stats
+ * Callback after executing SQL 'select player ID' / store DB id in local array and prepare welcome actions
  */
 public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], any:data)
 {
@@ -254,7 +247,9 @@ public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], 
 				g_PlayerDbId[client], g_ServerID,
 				g_PlayerDbId[client], g_ServerID,
 				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID, GetTime(), GetTime());
+				g_PlayerDbId[client], g_ServerID,
+				g_PlayerDbId[client], g_ServerID, GetTime(), 
+				g_PlayerDbId[client], g_ServerID);
 			SQL_TQuery(g_db, SQL_UpdatePlayerStats, Sql, data);
 		}
 }
@@ -267,12 +262,13 @@ public void SQL_UpdatePlayerStats(Handle:owner, Handle:hndl, const String:error[
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
 		decl String:Sql[SQL_MAX_LENGTH];
-		// Determine max killstreak of player
+		// Determine max killstreak of player for initializing the global array value
 		Format(Sql, sizeof(Sql), SQL_SELECT_MAXKILLSTREAK, g_PlayerDbId[client]);
 		SQL_TQuery(g_db, SQL_SelectMaxKillstreak, Sql, data);
-		// Get points of player
-		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERPOINTS, g_PlayerDbId[client]);
-		SQL_TQuery(g_db, SQL_SelectPlayerPoints, Sql, data);
+		// Get data of player
+		new timeLimit = GetTime() - g_MaxIdleSecs;
+		Format(Sql, sizeof(Sql), SQL_SELECT_DATAONCONNECT, g_ServerID, timeLimit, g_PlayerDbId[client], timeLimit, g_PlayerDbId[client]);
+		SQL_TQuery(g_db, SQL_SelectPlayerDataOnConnect, Sql, data);
 	}
 }
 
@@ -288,67 +284,75 @@ public void SQL_SelectMaxKillstreak(Handle:owner, Handle:hndl, const String:erro
 }
 
 /**
- * Callback after executing SQL 'select player points' / store points in local array and get rank
+ * Callback after executing SQL 'select player data on connect' / store some data in local array and announce player to others
  */
-public void SQL_SelectPlayerPoints(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
-	if (client > 0) {
-		if (SQL_FetchRow(hndl))
-			g_PlayerPoints[client] = SQL_FetchInt(hndl, 0);
-		// get player's rank
-		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK, g_PlayerPoints[client]);
-		SQL_TQuery(g_db, SQL_SelectPlayersRank, Sql, data);
-	}
-}
-
-/**
- * Callback after executing SQL 'select player's rank' / store points in local array and announce
- */
-public void SQL_SelectPlayersRank(Handle:owner, Handle:hndl, const String:error[], any:data)
-{
-	new client = GetClientFromUserID(data, hndl, error);
-	if (client > 0) {
-		if (SQL_FetchRow(hndl))
-			g_PlayerRank[client] = SQL_FetchInt(hndl, 0) + 1;
-		if (!g_PlayerSilentInit[client]) {
-			// get total of players (for announcement)
+	if (client > 0)
+		if (SQL_FetchRow(hndl)) {
+			g_PlayerPreviousLogin[client] = SQL_FetchInt(hndl, 1);
+			// Now, after getting the last login time, update it
 			decl String:Sql[SQL_MAX_LENGTH];
-			Format(Sql, sizeof(Sql), SQL_SELECT_TOTALPLAYERS);
-			SQL_TQuery(g_db, SQL_SelectTotalPlayers, Sql, data);
-		} else
-			g_PlayerSilentInit[client] = false;
-	}
-}
-
-/**
- * Callback after executing SQL 'select total no of players' / announce player
- */
-public void SQL_SelectTotalPlayers(Handle:owner, Handle:hndl, const String:error[], any:data)
-{
-	new client = GetClientFromUserID(data, hndl, error);
-	if (client > 0) {
-		decl totalPlayers;
-		if (SQL_FetchRow(hndl))
-			totalPlayers = SQL_FetchInt(hndl, 0);
-		else
-			totalPlayers = 0;
-		// get player's country
-		decl String:playerIp[20]; 
-		GetClientIP(client, playerIp, sizeof(playerIp), true);
-		decl String:playerCountry[50]; 
-		GeoipCountry(playerIp, playerCountry, sizeof(playerCountry));
-		decl String:playerName[MAX_NAME_LENGTH];
-		GetClientName(client, playerName, sizeof(playerName));
-		if (strlen(playerCountry) > 0) {
-			// announce player with country
-			PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "WelcomeWithCountry", playerName, playerCountry, g_PlayerRank[client], totalPlayers, g_PlayerPoints[client]);
-		} else {
-			// announce player without country
-			PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "WelcomeWithoutCountry", playerName, g_PlayerRank[client], totalPlayers, g_PlayerPoints[client]);
+			Format(Sql, sizeof(Sql), SQL_UPDATE_LASTENTER, GetTime(), g_PlayerDbId[client], g_ServerID);
+			SQL_TQuery(g_db, SQL_LogError, Sql, data);
+#if defined DEBUG
+			PrintToServer("%s+++++ Announcing client %d , silentInit: %d, PlayerPreviousLogin: %d +++++", PLUGIN_LOGPREFIX, client, g_PlayerSilentInit[client], g_PlayerPreviousLogin[client]); // DEBUG
+#endif
+			// Announce player if applicable
+			if (!g_PlayerSilentInit[client]) {
+				g_PlayerSilentInit[client] = false;
+				// get player's country
+				decl String:playerIp[20]; 
+				GetClientIP(client, playerIp, sizeof(playerIp), true);
+				decl String:playerCountry[50]; 
+				GeoipCountry(playerIp, playerCountry, sizeof(playerCountry));
+				decl String:playerName[MAX_NAME_LENGTH];
+				GetClientName(client, playerName, sizeof(playerName));
+				new rank = SQL_FetchInt(hndl, 2);
+				if (strlen(playerCountry) > 0) {
+					// announce player with country
+					if (g_PlayerPreviousLogin[client] > 0) {
+						// player has been here once - announce with ranking information
+						if (rank == 1) {
+							// wow - No 1 is coming!
+							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankAndCountryNo1", 
+								playerName, playerCountry, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG1);
+						} else {
+							// just a regular player...
+							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankAndCountry", 
+								playerName, playerCountry, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+						}
+					} else {
+						// player is here for the first time - just tell the name
+						PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithCountry", 
+								playerName, playerCountry, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+					}
+				} else {
+					// announce player without country
+					if (g_PlayerPreviousLogin[client] > 0) {
+						// player has been here once - announce with ranking information
+						if (rank == 1) {
+							// wow - No 1 is coming!
+							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankNo1", 
+								playerName, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG1);
+						} else {
+							// just a regular player...
+							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRank", 
+								playerName, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+						}
+					} else {
+						// player is here for the first time - just tell the name
+						PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "Announce", 
+								playerName, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+					}
+				}
+			}
 		}
-	}
 }
 
 /**
@@ -356,17 +360,51 @@ public void SQL_SelectTotalPlayers(Handle:owner, Handle:hndl, const String:error
  */
 public OnClientDisconnect(client) {
 	if (client <= MaxClients)
+		if (!IsFakeClient(client)) {
+#if defined DEBUG
+		PrintToServer("%s+++++ Disconnecting client %d +++++", PLUGIN_LOGPREFIX, client); // DEBUG
+#endif
 		ResetPlayer(client);
+	}
 }
 
 /**
- * Event Handler for PlayerSpawn (store the ClientTime to be able to determine average time alive)
+ * Event Handler for PlayerSpawn (store the ClientTime and spawns to be able to determine average time alive)
  */
 public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	if (!IsFakeClient(client)) {
 		new playtime = RoundToZero(GetClientTime(client));
 		g_PlayerSpawnedAt[client] = playtime;
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_UPDATE_SPAWNS, g_PlayerDbId[client], g_ServerID);
+		SQL_TQuery(g_db, SQL_LogError, Sql);
+		if (g_PlayerPreviousLogin[client] == 0) {
+			// first login on this server - show explanation panel
+			g_PlayerPreviousLogin[client] = 1;
+			// CreateTimer(1.0, Timer_InitExplanationPanel, client);
+#if defined DEBUG
+			PrintToServer("%s+++++ Function to be implemented: Explanation panel +++++", PLUGIN_LOGPREFIX); // DEBUG
+#endif
+		} else if (g_PlayerPreviousLogin[client] > 1 && GetTime() - g_PlayerPreviousLogin[client] > 2 * 60 * 60) {
+			// last login more than 2 hours ago - show welcome panel
+			g_PlayerPreviousLogin[client] = 1;
+			CreateTimer(1.0, Timer_InitWelcomePanel, client);
+		}
+	}
+}
+
+/**
+ * Handler for the timer to display the welcome panel to a player 
+ * 
+ * @param timer 		handle for the timer
+ * @param client		client id
+ */
+public Action:Timer_InitWelcomePanel(Handle:timer, any:client) {
+	if (IsClientConnected(client) && !IsFakeClient(client)) {
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[client], GetTime() - g_MaxIdleSecs, g_PlayerDbId[client]);
+		SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
 	}
 }
 
@@ -414,20 +452,20 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		g_PlayerKillstreak[victimId] = 0;
 		// increase victim's death counter, store time alive and substract points
 		new penaltyPoints = g_PointsPerDeath;
-		new ungrateful = 0;
+		new ungraceful = 0;
 		if (weaponIdx == -1 || victimId == attackerId) {
-			// probably ungrateful death
-			penaltyPoints = g_PointsPerUngratefulDeath;
-			ungrateful = 1;
+			// probably ungraceful death
+			penaltyPoints = g_PointsPerUngracefulDeath;
+			ungraceful = 1;
 		}
 		new timeAlive = RoundToZero(GetClientTime(victimId)) - g_PlayerSpawnedAt[victimId];
 		g_PlayerSpawnedAt[victimId] = 0;
-		Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungrateful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
+		Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungraceful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// tell victim about his/her misery (in case there are points to loose)
 		if (penaltyPoints != 0)
-			if (ungrateful > 0)
-				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngratefulDeathMessage", -penaltyPoints);
+			if (ungraceful > 0)
+				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessage", -penaltyPoints);
 			else {
 				decl String:attackerName[MAX_NAME_LENGTH];
 				GetClientName(attackerId, attackerName, sizeof(attackerName));
@@ -587,11 +625,8 @@ public RanklistMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 			// store information about coming from ranklist - to get back after closing the ranking panel
 			g_CurrentMenuState[param1][0] = startFrom;
 			g_CurrentMenuState[param1][1] = itemNo;
-#if defined DEBUG
-			PrintToServer("%s+++++ RanklistMenuHandler +++++ / startFrom: %d / itemNo: %d", PLUGIN_LOGPREFIX, startFrom, itemNo); // DEBUG
-#endif
 			decl String:Sql[SQL_MAX_LENGTH];
-			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, itemNo + startFrom, playerId);
+			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, itemNo + startFrom, GetTime() - g_MaxIdleSecs, playerId);
 			SQL_TQuery(g_db, SQL_InitRankingPanel, Sql, GetClientUserId(param1));
 		}
 	} else 
@@ -661,13 +696,13 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
 				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
 #endif
 			}
-		} else if (strcmp(key, "PointsPerUngratefulDeath", false) == 0) {
+		} else if (strcmp(key, "PointsPerUngracefulDeath", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
-				g_PointsPerUngratefulDeath = intVal;
+				g_PointsPerUngracefulDeath = intVal;
 			} else {
 				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerUngratefulDeath': %s (value must be between -999 and 999)", g_ConfigLine, value);
+				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerUngracefulDeath': %s (value must be between -999 and 999)", g_ConfigLine, value);
 				LogError(g_LastError);
 #if defined DEBUG
 				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
@@ -716,6 +751,18 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
 			} else {
 				result = SMCParse_Halt;
 				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'ServerID': %s (value must be between 0 and 999)", g_ConfigLine, value);
+				LogError(g_LastError);
+#if defined DEBUG
+				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
+#endif
+			}
+		} else if (strcmp(key, "MaxIdleDays", false) == 0) {
+			intVal = StringToInt(value);
+			if (intVal >= 0 && intVal <= 9999) {
+				g_MaxIdleSecs = intVal * 24 * 60 * 60;
+			} else {
+				result = SMCParse_Halt;
+				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'MaxIdleDays': %s (value must be between 0 and 9999)", g_ConfigLine, value);
 				LogError(g_LastError);
 #if defined DEBUG
 				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
@@ -866,7 +913,7 @@ public Action:RankCommandHandler(client, args) {
 	if (args >= 1) {
 		// target specified, get client id
 		GetCmdArg(1, strTarget, sizeof(strTarget));
-		// target @me doesn't work when ProcessTargetString is performed server side - so replace it!
+		// target @me doesn't work because ProcessTargetString is performed server side - so replace it!
 		if (strcmp(strTarget, "@me", false) == 0)
 			Format(strTarget, sizeof(strTarget), "#%d", GetClientUserId(client));
 		new String:targetName[MAX_TARGET_LENGTH];
@@ -882,6 +929,7 @@ public Action:RankCommandHandler(client, args) {
 			targetName, 
 			sizeof(targetName), 
 			tn_is_ml)) <= 0) {
+				// TODO: check if target is a name, then search for it
 			ReplyToTargetError(client, targetCount);
 			return Plugin_Handled;
 		} else 
@@ -889,7 +937,7 @@ public Action:RankCommandHandler(client, args) {
 	}
 	if (g_PlayerDbId[showClient] > 0) {
 		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[showClient], g_PlayerDbId[showClient]);
+		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[showClient], GetTime() - g_MaxIdleSecs, g_PlayerDbId[showClient]);
 		SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
 	}
 	return Plugin_Handled;
@@ -910,7 +958,10 @@ public void SQL_GotRankForStatisticsPanel(Handle:owner, Handle:hndl, const Strin
 		}
 		g_CurrentMenuState[client][0] = -1;
 		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, rank, showPlayerId);
+		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, rank, GetTime() - g_MaxIdleSecs, showPlayerId);
+#if defined DEBUG
+		PrintToServer("%s\n*** Get Player Stats: %s\n", PLUGIN_LOGPREFIX, Sql);
+#endif		
 		SQL_TQuery(g_db, SQL_InitRankingPanel, Sql, data);
 	}
 }
@@ -926,11 +977,20 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
 		new kills = SQL_FetchInt(hndl, 5);
 		new deaths = SQL_FetchInt(hndl, 9);
-		new timeAlive = SQL_FetchInt(hndl, 11);
+		new timeSinceSpawn = RoundToZero(GetClientTime(client)) - g_PlayerSpawnedAt[client];
+		new timeAlive = SQL_FetchInt(hndl, 11) + timeSinceSpawn;
+#if defined DEBUG
+		PrintToServer("%s*** SQL_InitRankingPanel *** TimeAlive=%d, g_PlayerSpawnedAt=%d, delta=%d", PLUGIN_LOGPREFIX, timeAlive, g_PlayerSpawnedAt[client], timeSinceSpawn);
+#endif
+		new spawns = SQL_FetchInt(hndl, 12);
 		
 		decl String:panelLine[MAX_PANELLINE_LENGTH];
 		Panel panel = new Panel();
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Title", client, playerName);
+		// check if this is the spawn welcome message
+		if (timeSinceSpawn < 10)
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_WelcomeTitle", client, playerName);
+		else
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Title", client, playerName);
 		panel.SetTitle(panelLine);
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line1", client, SQL_FetchInt(hndl, 2), SQL_FetchInt(hndl, 3));
@@ -946,16 +1006,20 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line6", client, deaths, SQL_FetchInt(hndl, 10));
 		panel.DrawText(panelLine);
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		float kdRatio = 999.99;
-		if (deaths != 0)
-			kdRatio = FloatDiv(float(kills), float(deaths));
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line7", client, kdRatio);
-		panel.DrawText(panelLine);
 		if (timeAlive > 0) {
-			timeAlive = timeAlive / deaths;
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line7", client, timeAlive / (60 * 60), (timeAlive / 60) % 60);
+			panel.DrawText(panelLine);
+		}
+		if (timeAlive > 0) {
+			timeAlive = timeAlive / spawns;
 			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line8", client, timeAlive / 60, timeAlive % 60);
 			panel.DrawText(panelLine);
 		}
+		float kdRatio = 999.99;
+		if (deaths != 0)
+			kdRatio = FloatDiv(float(kills), float(deaths));
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line9", client, kdRatio);
+		panel.DrawText(panelLine);
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
@@ -991,7 +1055,9 @@ public Action:DebugCommandHandler(client, args) {
 	PrintToServer("%sDebug command executed!!!", PLUGIN_LOGPREFIX);
 	PrintToServer("%s****", PLUGIN_LOGPREFIX);
 	PrintToChat(client, "\x01\\x01 \x02\\x02 \x03\\x03 \x04\\x04 \x05\\x05 \x06\\x06");
-	// PrintToChat(client, "%t", "DebugMessage", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, client, g_PlayerRank[client]);
+	PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankAndCountry", 
+								"testplayer", "some country", -1, -99, -999, 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
 	return Plugin_Handled;
 }
 #endif
@@ -1053,31 +1119,18 @@ void ResetPlayer(const client) {
 			g_PlayerKillstreak[i] = 0;
 			g_PlayerSpawnedAt[i] = 0;
 			g_PlayerMaxKillstreak[i] = -1;
-			g_PlayerRank[i] = -1;
 			g_PlayerDbId[i] = -1;
-			g_PlayerPoints[i] = -1;
+			g_PlayerPreviousLogin[i] = -1;
+			g_PlayerSilentInit[i] = false;
 		}
 	} else if (client >= 0 && client < sizeof(g_PlayerKillstreak)) {
 		g_PlayerKillstreak[client] = 0;
 		g_PlayerSpawnedAt[client] = 0;
 		g_PlayerMaxKillstreak[client] = -1;
-		g_PlayerRank[client] = -1;
 		g_PlayerDbId[client] = -1;
-		g_PlayerPoints[client] = -1;
+		g_PlayerPreviousLogin[client] = -1;
+		g_PlayerSilentInit[client] = false;
 	}
-}
-
-/**
- * Calculates the printed length of a string - multibyte-safe!
- *
- */
-stock StrLenMB(const String:str[])
-{
-	new len = strlen(str);
-	new count;
-	for(new i; i < len; i++)
-		count += ((str[i] & 0xc0) != 0x80) ? 1 : 0;
-	return count;
 }
 
 //
@@ -1137,6 +1190,7 @@ void SQL_InitDB() {
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx1);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx2);
+		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx3);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Servers);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Version);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_WeaponStats);
@@ -1172,26 +1226,3 @@ GetClientFromUserID(const userid, const Handle:handle, const String:error[]) {
 	} else
 		return GetClientOfUserId(userid);
 }
-
-
-//
-// Debug functions - not to be meant in release version!
-//
-
-#if defined DEBUG
-
-void Debug_PrintArray(const Handle:arrayHandle, const bool:isNum) {
-	decl value;
-	decl String:valueString[255];
-	for (new i = 0; i < GetArraySize(arrayHandle); i++) {
-		if (isNum) {
-			value = GetArrayCell(arrayHandle, i);
-			PrintToServer("%d: %d", i, value);
-		} else {
-			GetArrayString(arrayHandle, i, valueString, sizeof(valueString));
-			PrintToServer("%d: %s", i, valueString);
-		}
-	}
-}
-
-#endif
