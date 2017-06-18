@@ -4,7 +4,6 @@
 	{
 		"#format"	"{1:s},{2:t},{3:s},{4:d},{5:d}"
 		"en"		"{1}{2}{3} Client ID {4} (rank points {5}) issued a debug command."
-		"de"		"{1} aus {2} verbunden!\n[Ranglistenplatz {3} (von {4}) mit {5} Punkten!]"
 	}
 	"ChatPrefix"
 	{
@@ -45,17 +44,27 @@
 	{
 		"en"		"Usage: %s <name|#userid>\nShows own rank and statistics or those of the given player."
 	}
+	"CVarMessageEnabled"
+	{
+		"en"		"Ranking enabled."
+		"de"		"Ranglistenfunktionalität aktiviert."
+	}
+	"CVarMessageDisabled"
+	{
+		"en"		"Ranking disabled."
+		"de"		"Ranglistenfunktionalität deaktiviert."
+	}
 	"AnnounceWithRankAndCountry"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s},{8:s},{9:s}"
-		"en"		"{6}{1}{7} connected from {2}!\n[{8}Ranked: #{3}{9} out of {4} players with {5} Points!]"
-		"de"		"{6}{1}{7} aus {2} verbunden!\n[{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!]"
+		"en"		"{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {5} Points!"
+		"de"		"{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!"
 	}
 	"AnnounceWithRankAndCountryNo1"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s}{8:s},{9:s},{10:s}"
-		"en"		"{10}Buckle up! The No. 1 is coming!\n{6}{1}{7} connected from {2}!\n[{8}Ranked: #{3}{9} out of {4} players with {5} Points!]"
-		"de"		"{10}Schnallt euch an! Die Nummer 1 kommt!\n{6}{1}{7} aus {2} verbunden!\n[{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!]"
+		"en"		"{10}Buckle up! The No. 1 is coming!\n{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {5} Points!"
+		"de"		"{10}Schnallt euch an! Die Nummer 1 kommt!\n{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!"
 	}
 	"AnnounceWithCountry"
 	{
@@ -66,14 +75,14 @@
 	"AnnounceWithRank"
 	{
 		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
-		"en"		"{5}{1}{6} connected!\n[{7}Ranked: #{2}{8} out of {3} players with {4} Points!]"
-		"de"		"{5}{1}{6} verbunden!\n[{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!]"
+		"en"		"{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {4} Points!"
+		"de"		"{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!"
 	}
 	"AnnounceWithRankNo1"
 	{
 		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s}"
-		"en"		"{9}Buckle up! The No. 1 is coming!\n{5}{1}{6} connected!\n[{7}Ranked: #{2}{8} out of {3} players with {4} Points!]"
-		"de"		"{9}Schnallt euch an! Die Nummer 1 kommt!\n{5}{1}{6} verbunden!\n[{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!]"
+		"en"		"{9}Buckle up! Here comes No. 1!!!\n{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {4} Points!"
+		"de"		"{9}Hier kommt die Nummer 1!!!\n{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!"
 	}
 	"Announce"
 	{
@@ -97,10 +106,21 @@
 		"en"		"You loose {1} points for being killed."
 		"de"		"Du wurdest getötet und verlierst {1} Punkte."
 	}
+	"DeathMessageSingular"
+	{
+		"#format"	"{1:i}"
+		"en"		"You loose a point for being killed."
+		"de"		"Du wurdest getötet und verlierst einen Punkt."
+	}
 	"UngracefulDeathMessage"
 	{
 		"en"		"Ungraceful death: you loose %d points."
 		"de"		"Unwürdiger Tod: Dir werden %d Punkte abgezogen."
+	}
+	"UngracefulDeathMessageSingular"
+	{
+		"en"		"Ungraceful death: you loose a point."
+		"de"		"Unwürdiger Tod: Dir wird ein Punkt abgezogen."
 	}
 	"KillMessage"
 	{
@@ -108,11 +128,23 @@
 		"en"		"You earn {1} points for killing {2}."
 		"de"		"Du hast {2} getötet und erhältst {1} Punkte."
 	}
+	"KillMessageSingular"
+	{
+		"#format"	"{1:s}"
+		"en"		"You earn one point for killing {1}."
+		"de"		"Du hast {1} getötet und erhältst einen Punkt."
+	}
 	"HeadshotMessage"
 	{
 		"#format"	"{1:i},{2:s}"
 		"en"		"You earn {1} points for killing {2} by headshot."
 		"de"		"Du hast {2} per Kopfschuss getötet und erhältst {1} Punkte."
+	}
+	"HeadshotMessageSingular"
+	{
+		"#format"	"{1:s}"
+		"en"		"You earn one point for killing {1} by headshot."
+		"de"		"Du hast {1} per Kopfschuss getötet und erhältst einen Punkt."
 	}
 	"AssistMessagePlural"
 	{
@@ -209,8 +241,8 @@
 	"ExplainPanel_Rankline"
 	{
 		"#format"	"{1:i},{2:s},{3:i}"
-		"en"		"No. {1}: {2} ({3})"
-		"de"		"Platz {1}: {2} ({3})"
+		"en"		"No. {1}: {2} ({3} Points)"
+		"de"		"Platz {1}: {2} ({3} Pkt.)"
 	}
 	"ExplainPanel_Line3"
 	{

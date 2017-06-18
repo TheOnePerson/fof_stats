@@ -19,7 +19,7 @@
 	
 	****
 
-	Make sure that fof_stats.cfg is in your sourcemod/configs/ directory.
+	Make sure that fof_rank.cfg is in your sourcemod/configs/ directory.
 	You can tweak the ranking point system there.
 
 	CVars:
@@ -34,10 +34,8 @@
 */
 
 /**
- * TODO: Don't keep track of points in warm-up time
  * TODO: Play "\sound\player\voice\brag_bestinwest.wav" when #1 connects/enters (or "\sound\player\voice\howl_yeehaw2.wav" or "\sound\monastery\bell.wav")
  * TODO: implement killstreak top 10
- * TODO: actualize config file, there are weapons missing!
  */
 
 /*
@@ -56,36 +54,39 @@
 #include <adt_trie>
 #include <geoip>
 
-#define PLUGIN_NAME 		"FoF Statistics and Ranking"
-#define PLUGIN_VERSION 		"0.4.5"
+#define PLUGIN_NAME 		"FoF Ranking and Statistics"
+#define PLUGIN_VERSION 		"0.8.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
 
-#define CONFIG_FILENAME "fof_stats.cfg"
-#define TRANSLATIONS_FILENAME "fof_stats.phrases"
-#define PLUGIN_PREFIX "\x01[SM] (Ranking) \x04"
-#define CHAT_COLORTAG1 "\x07FFD700"
-#define CHAT_COLORTAG_NORM "\x01"
-#define CHAT_COLORTAG_TEAM "\x03"
+#define CONFIG_FILENAME 	"fof_rank.cfg"
+#define TRANSLATIONS_FILENAME "fof_rank.phrases"
+#define CHAT_COLORTAG1 		"\x0794D8E9"
+#define CHAT_COLORTAG_NORM 	"\x01"
+#define CHAT_COLORTAG_TEAM 	"\x03"
 
-#define PLUGIN_LOGPREFIX "[FoF Stats and Ranking] "
+#define PLUGIN_LOGPREFIX 	"[FoF Ranking] "
 
-#define MAX_WEAPONS 50
-
-#define MAX_MESSAGE_LENGTH 128
+#define MAX_WEAPONS 60
 #define MAX_PANELLINE_LENGTH 80
 #define STEAMID_LENGTH 25
+#define DEFAULT_TP_WARMUPTIME 10
+#define DEFAULT_IDLESECS 60 * 24 * 60 * 60
 
 #define COMMAND_TOP10 "sm_top10"
 #define COMMAND_RANK "sm_rank"
 #define COMMAND_RELOAD "sm_rank_reload"
-#define COMMAND_GIVEPOINTS "sm_givepoints"
+#define COMMAND_GIVEPOINTS "sm_giverankpoints"
 
-#define CVAR_VERSION "sm_stats_version"
+#define CVAR_VERSION "sm_rank_version"
+#define CVAR_ENABLED "sm_rank_enabled"
+#define CVAR_ANNOUNCEPLAYERS "sm_rank_announceplayers"
+#define CVAR_SHOWPANELS "sm_rank_showpanels"
+#define CVAR_INFORMPOINTS "sm_rank_informpoints"
 
 #if defined ENGINE_SQLITE
-	#include <fof_stats_sqlite.inc>	// SQLite specific declarations
+	#include <fof_rank_sqlite.inc>	// SQLite specific declarations
 #endif
 
 // Plugin definitions
@@ -108,6 +109,14 @@ enum enumConfigWeaponDetails
 	cs_PointsPerHeadshot
 };
 
+// cvar handles
+new Handle:g_CvarEnabled = INVALID_HANDLE;
+new Handle:g_CvarAnnouncePlayers = INVALID_HANDLE;
+new Handle:g_CvarShowPanels = INVALID_HANDLE;
+new Handle:g_CvarInformPoints = INVALID_HANDLE;
+new Handle:g_CvarFofCurrentMode = INVALID_HANDLE;
+new Handle:g_CvarFofWarmupTime = INVALID_HANDLE;
+
 // global dynamic arrays
 new Handle:g_WeaponDetails = INVALID_HANDLE;		// list of arrays holding the points per weapon
 
@@ -128,7 +137,12 @@ new g_ConfigLine;								// for config file parsing: keeps track of the current 
 new g_currentWeaponConfig[enumConfigWeaponDetails];
 
 new g_ServerID = 1;								// ID of the current server (normally 1)
-new g_MaxIdleSecs = 60 * 24 * 60 * 60;
+new bool:g_Enabled = true;
+new bool:g_Warmup = false;
+new bool:g_AnnouncePlayers = true;
+new bool:g_ShowPanels = true;
+new bool:g_InformAboutPoints = true;
+new g_MaxIdleSecs = DEFAULT_IDLESECS;
 new g_ActivePlayers = 0;
 new g_DefaultPointsPerKill = 3;
 new g_DefaultPointsPerHeadshot = 5;
@@ -148,16 +162,28 @@ public OnPluginStart() {
 	
 	g_WeaponDetails = CreateArray(enumConfigWeaponDetails);
 	
-	CreateConVar(CVAR_VERSION, PLUGIN_VERSION, "FoF Statistics and Ranking version", FCVAR_NOTIFY | FCVAR_REPLICATED | FCVAR_DONTRECORD | FCVAR_SPONLY);
+	CreateConVar(CVAR_VERSION, PLUGIN_VERSION, "FoF Ranking and Statistics version", FCVAR_NOTIFY | FCVAR_REPLICATED | FCVAR_DONTRECORD | FCVAR_SPONLY);
+	g_CvarEnabled = CreateConVar(CVAR_ENABLED, "1", "1 enables the FoF Ranking plugin, 0 disables it.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_CvarAnnouncePlayers = CreateConVar(CVAR_ANNOUNCEPLAYERS, "1", "If set to 1, every new player is announced to others on login.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_CvarShowPanels = CreateConVar(CVAR_SHOWPANELS, "1", "If set to 1, a connecting player is presented a ranking information panel.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_CvarInformPoints = CreateConVar(CVAR_INFORMPOINTS, "1", "If set to 1, every player gets ranking information on kills or deaths as chat messages.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_CvarFofCurrentMode = FindConVar("fof_sv_currentmode");
+	g_CvarFofWarmupTime = FindConVar("fof_sv_obj_warmuptime");
 	
 	RegAdminCmd(COMMAND_RELOAD, ReloadConfigHandler, ADMFLAG_CUSTOM1, "FoF Statistics and Ranking: Reload the config file");
 	RegAdminCmd(COMMAND_GIVEPOINTS, PlayerCommandHandler, ADMFLAG_CUSTOM1, "FoF Statistics and Ranking: Give points to player (or remove these)");
 	RegConsoleCmd(COMMAND_TOP10, Top10Handler, "FoF Statistics and Ranking: Show ranking list");
 	RegConsoleCmd(COMMAND_RANK, RankCommandHandler, "FoF Statistics and Ranking: Show player's ranking and statistics");
 #if defined DEBUG
-	RegConsoleCmd("sm_stats", DebugCommandHandler, "FoF Statistics and Ranking: Debug command");
+	RegConsoleCmd("sm_rank_debug", DebugCommandHandler, "FoF Statistics and Ranking: Debug command");
 #endif
 	
+	// Hook cvar changes
+	HookConVarChange(g_CvarEnabled, CVar_EnabledChanged);
+	HookConVarChange(g_CvarAnnouncePlayers, CVar_AnnouncePlayersChanged);
+	HookConVarChange(g_CvarShowPanels, CVar_ShowPanelsChanged);
+	HookConVarChange(g_CvarInformPoints, CVar_InformPointsChanged);
+
 	SQL_OpenDB();
 	
 	AutoExecConfig();
@@ -166,6 +192,7 @@ public OnPluginStart() {
 	HookEvent("player_death", Event_PlayerDeath);
 	HookEvent("player_spawn", Event_PlayerSpawn);
 	HookEvent("round_end", Event_RoundEnd);
+	
 }
 
 public OnPluginEnd() {
@@ -188,6 +215,31 @@ public void OnConfigsExecuted() {
 		else
 			ResetPlayer(i);
 }
+
+/**
+ * CVar handlers
+ */
+public CVar_EnabledChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+	decl String:tag[50];
+	if (strcmp(newval, "0") == 0) {
+		g_Enabled = false;
+		strcopy(tag, sizeof(tag), "CVarMessageEnabled");
+	} else {
+		g_Enabled = true;
+		strcopy(tag, sizeof(tag), "CVarMessageDisabled");
+	}
+	PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, tag);
+}
+public CVar_AnnouncePlayersChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+	g_AnnouncePlayers = !(strcmp(newval, "0") == 0);
+}
+public CVar_ShowPanelsChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+	g_ShowPanels = !(strcmp(newval, "0") == 0);
+}
+public CVar_InformPointsChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+	g_InformAboutPoints = !(strcmp(newval, "0") == 0);
+}
+
 
 /**
  * Handler for connecting clients
@@ -230,7 +282,7 @@ public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], 
 	if (client > 0)
 		if (SQL_FetchRow(hndl)) {
 			g_PlayerDbId[client] = SQL_FetchInt(hndl, 0);
-			// Insert or update playerStats entry
+			// Insert or update playerstats entry
 			decl String:Sql[SQL_MAX_LENGTH];
 			decl loginInc;
 			// only increment logins on new players (or else login increases every reload of this plugin)
@@ -299,7 +351,7 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 			PrintToServer("%s+++++ Announcing client %d , silentInit: %d, PlayerPreviousLogin: %d +++++", PLUGIN_LOGPREFIX, client, g_PlayerSilentInit[client], g_PlayerPreviousLogin[client]); // DEBUG
 #endif
 			// Announce player if applicable
-			if (!g_PlayerSilentInit[client]) {
+			if (!g_PlayerSilentInit[client] && g_AnnouncePlayers && g_Enabled) {
 				g_PlayerSilentInit[client] = false;
 				// get player's country
 				decl String:playerIp[20]; 
@@ -355,7 +407,7 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 }
 
 /**
- * Callback for refreshing the no of active players in db
+ * Callback for refreshing the no. of active players in db
  */
 public void SQL_RefreshActivePlayers(Handle:owner, Handle:hndl, const String:error[], any:data)
 {
@@ -387,7 +439,7 @@ public OnClientDisconnect(client) {
  */
 public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
-	if (!IsFakeClient(client)) {
+	if (!IsFakeClient(client) && g_Enabled) {
 		new playtime = RoundToZero(GetClientTime(client));
 		g_PlayerSpawnedAt[client] = playtime;
 		decl String:Sql[SQL_MAX_LENGTH];
@@ -396,15 +448,22 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 		
 #if defined DEBUG
 		PrintToServer("%s+++++ Event_PlayerSpawn +++++ / Current Time: %d, Last Login: %d, Delta: %d", PLUGIN_LOGPREFIX, GetTime(), g_PlayerPreviousLogin[client], GetTime() - g_PlayerPreviousLogin[client]); // DEBUG
+		// Just for testing...
+		//decl String:playerName[MAX_NAME_LENGTH];
+		//GetClientName(client, playerName, sizeof(playerName));
+		//if (strcmp(playerName, "almostagreatplayer") == 0)
+		//	g_PlayerPreviousLogin[client] = 0;
 #endif
-		if (g_PlayerPreviousLogin[client] == 0) {
-			// first login on this server - show explanation panel
-			g_PlayerPreviousLogin[client] = 1;
-			CreateTimer(1.0, Timer_InitExplanationPanel, client);
-		} else if (g_PlayerPreviousLogin[client] > 1 && (GetTime() - g_PlayerPreviousLogin[client]) > 2 * 60 * 60) {
-			// last login more than 2 hours ago - show welcome panel
-			g_PlayerPreviousLogin[client] = 1;
-			CreateTimer(2.0, Timer_InitWelcomePanel, client);
+		if (g_ShowPanels) {
+			if (g_PlayerPreviousLogin[client] == 0) {
+				// first login on this server - show explanation panel
+				g_PlayerPreviousLogin[client] = 1;
+				CreateTimer(1.0, Timer_InitExplanationPanel, client);
+			} else if (g_PlayerPreviousLogin[client] > 1 && (GetTime() - g_PlayerPreviousLogin[client]) > 2 * 60 * 60) {
+				// last login more than 2 hours ago - show welcome panel
+				g_PlayerPreviousLogin[client] = 1;
+				CreateTimer(2.0, Timer_InitWelcomePanel, client);
+			}
 		}
 	}
 }
@@ -444,7 +503,7 @@ public Action:Timer_InitExplanationPanel(Handle:timer, any:client) {
  */
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
 	for (new i = 0; i <= MaxClients; i++) {
-		if (!IsFakeClient(i)) {
+		if (!IsFakeClient(i) && g_Enabled) {
 			if (g_PlayerDbId[i] > 0 && g_PlayerSpawnedAt[i] > 0) {
 				decl String:Sql[SQL_MAX_LENGTH];
 				Format(Sql, sizeof(Sql), SQL_UPDATE_TIMEALIVE, RoundToZero(GetClientTime(i)) - g_PlayerSpawnedAt[i], g_PlayerDbId[i], g_ServerID);
@@ -479,7 +538,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 	victimId = GetClientOfUserId(victimId);
 	attackerId = GetClientOfUserId(attackerId);
 	assistId = GetClientOfUserId(assistId);
-	if (g_PlayerDbId[victimId] > 0) {
+	if (g_PlayerDbId[victimId] > 0 && g_Enabled) {
 		g_PlayerKillstreak[victimId] = 0;
 		// increase victim's death counter, store time alive and substract points
 		new penaltyPoints = g_PointsPerDeath;
@@ -494,16 +553,20 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungraceful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// tell victim about his/her misery (in case there are points to loose)
-		if (penaltyPoints != 0)
+		if (penaltyPoints != 0 && g_InformAboutPoints)
 			if (ungraceful > 0)
-				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessage", -penaltyPoints);
+				if (penaltyPoints != 1)
+					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessage", -penaltyPoints);
+				else
+					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessageSingular");
 			else {
-				decl String:attackerName[MAX_NAME_LENGTH];
-				GetClientName(attackerId, attackerName, sizeof(attackerName));
-				PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints, attackerName);
+				if (penaltyPoints != 1)
+					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints);
+				else
+					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessageSingular");
 			}
 	}
-	if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId) {
+	if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId && g_Enabled) {
 		// find the weapon data and give points to attacker
 		new rankPoints = GetKillPointsToWeaponIdx(weaponIdx, !headshot);
 		decl headshotInc;
@@ -526,15 +589,22 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 		// tell attacker about his/her fortune
-		decl String:victimName[MAX_NAME_LENGTH];
-		GetClientName(victimId, victimName, sizeof(victimName));
-		// TODO: Insert weapon name in message!
-		if (headshot)
-			PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessage", rankPoints, victimName);
-		else
-			PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessage", rankPoints, victimName);
+		if (g_InformAboutPoints) {
+			decl String:victimName[MAX_NAME_LENGTH];
+			GetClientName(victimId, victimName, sizeof(victimName));
+			if (headshot)
+				if (rankPoints != 1)
+					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessage", rankPoints, victimName);
+				else
+					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessageSingular", victimName);
+			else
+				if (rankPoints != 1)
+					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessage", rankPoints, victimName);
+				else
+					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessageSingular", victimName);
+		}
 	}
-	if (g_PlayerDbId[assistId] > 0 && g_PointsPerAssist != 0) {
+	if (g_PlayerDbId[assistId] > 0 && g_PointsPerAssist != 0 && g_Enabled) {
 		// credit points to assisting player
 		Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, g_PointsPerAssist, g_PlayerDbId[assistId], g_ServerID);
 		SQL_TQuery(g_db, SQL_LogError, Sql);
@@ -542,10 +612,12 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		Format(Sql, sizeof(Sql), SQL_UPDATE_KILLASSISTS, g_PlayerDbId[assistId], g_ServerID);
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		// tell assisting player about his/her fortune
-		if (g_PointsPerAssist == 1)
-			PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessageSingular", g_PointsPerAssist);
-		else
-			PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessagePlural", g_PointsPerAssist);
+		if (g_InformAboutPoints) {
+			if (g_PointsPerAssist == 1)
+				PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessageSingular", g_PointsPerAssist);
+			else
+				PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessagePlural", g_PointsPerAssist);
+		}
 	}
 }
 
@@ -566,21 +638,23 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
  */
 public Action:Top10Handler(client, args) {
 	
-	decl String:strStartFrom[20];
-	new startFrom = 0;
-	if (args >= 1) {
-		// starting number specified, get it
-		GetCmdArg(1, strStartFrom, sizeof(strStartFrom));
-		startFrom = StringToInt(strStartFrom);
-		if (startFrom < 1) {
-			decl String:strCommand[MAX_NAME_LENGTH];
-			GetCmdArg(0, strCommand, sizeof(strCommand));
-			ReplyToCommand(client, "%t", "CommandReplyTop10", strCommand);
-			return Plugin_Handled;
-		} else
-			startFrom--;
+	if (g_Enabled) {
+		decl String:strStartFrom[20];
+		new startFrom = 0;
+		if (args >= 1) {
+			// starting number specified, get it
+			GetCmdArg(1, strStartFrom, sizeof(strStartFrom));
+			startFrom = StringToInt(strStartFrom);
+			if (startFrom < 1) {
+				decl String:strCommand[MAX_NAME_LENGTH];
+				GetCmdArg(0, strCommand, sizeof(strCommand));
+				ReplyToCommand(client, "%t", "CommandReplyTop10", strCommand);
+				return Plugin_Handled;
+			} else
+				startFrom--;
+		}
+		InitRankList(client, startFrom, 1);
 	}
-	InitRankList(client, startFrom, 1);
  	return Plugin_Handled;
 }
 
@@ -714,90 +788,55 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
 	new SMCResult:result = SMCParse_Continue;
 	decl intVal;
 	if (g_SectionDepth == 1) {
-		// Level 1 = default values
+		// Level 1 = default and global values
 		if (strcmp(key, "PointsPerDeath", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
 				g_PointsPerDeath = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerDeath': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		} else if (strcmp(key, "PointsPerUngracefulDeath", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
 				g_PointsPerUngracefulDeath = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerUngracefulDeath': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		} else if (strcmp(key, "PointsPerKill", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
 				g_DefaultPointsPerKill = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerKill': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		} else if (strcmp(key, "PointsPerAssist", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
 				g_PointsPerAssist = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerAssist': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		} else if (strcmp(key, "PointsPerHeadshot", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
 				g_DefaultPointsPerHeadshot = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerHeadshot': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		} else if (strcmp(key, "ServerID", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= 0 && intVal <= 999) {
 				g_ServerID = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'ServerID': %s (value must be between 0 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, 0, 999);
 			}
 		} else if (strcmp(key, "MaxIdleDays", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= 0 && intVal <= 9999) {
 				g_MaxIdleSecs = intVal * 24 * 60 * 60;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'MaxIdleDays': %s (value must be between 0 and 9999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, 0, 9999);
 			}
 		}
 	} else if (g_SectionDepth == 2) {
@@ -809,28 +848,28 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
 			if (intVal >= -999 && intVal <= 999) {
 				g_currentWeaponConfig[cs_PointsPerKill] = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerKill': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		} else if (strcmp(key, "PointsPerHeadshot", false) == 0) {
 			intVal = StringToInt(value);
 			if (intVal >= -999 && intVal <= 999) {
 				g_currentWeaponConfig[cs_PointsPerHeadshot] = intVal;
 			} else {
-				result = SMCParse_Halt;
-				Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for 'PointsPerHeadshot': %s (value must be between -999 and 999)", g_ConfigLine, value);
-				LogError(g_LastError);
-#if defined DEBUG
-				PrintToServer("%s%s", PLUGIN_LOGPREFIX, g_LastError);
-#endif
+				result = Config_ReplyToParseErrorInt(key, value, -999, 999);
 			}
 		}
 	}
 	return result;
+}
+
+/*
+ * Internal routine for reacting to errors in config files
+ */
+SMCResult:Config_ReplyToParseErrorInt(const String:key[], const String:value[], const minValue, const maxValue) {
+	Format(g_LastError, sizeof(g_LastError), "Error in config file line %d: Invalid value specified for '%s': %s (value must be between %d and %d)", 
+		g_ConfigLine, key, value, minValue, maxValue);
+	LogError(g_LastError);
+	return SMCParse_Halt;
 }
 
 public SMCResult:Config_EndSection(Handle:parser) {
@@ -859,9 +898,35 @@ public Config_End(Handle:parser, bool:halted, bool:failed) {
 public void OnMapStart() {
 	// reset all player data
 	ResetPlayer(0);
+	// check for teamplay map and start warmup timer
+	if ((g_CvarFofWarmupTime != INVALID_HANDLE) && (g_CvarFofCurrentMode != INVALID_HANDLE)) {
+		new mode = GetConVarInt(g_CvarFofCurrentMode);
+		new warmupSecs = GetConVarInt(g_CvarFofWarmupTime);
+		if ((mode == 1 || mode == 2) && warmupSecs > 0) {
+			// we have to start a warmup timer!
 #if defined DEBUG
-	PrintToServer("%s*** Resetting all Players! ***", PLUGIN_LOGPREFIX);
+			PrintToServer("%sWe have a warmup time! (%d seconds)", PLUGIN_LOGPREFIX, warmupSecs);
 #endif
+			g_Warmup = true;
+			CreateTimer(float(warmupSecs), Timer_WarmupEnded);
+		} else
+			g_Warmup = false;
+	} else
+		g_Warmup = false;
+}
+
+/**
+ * Handler for the timer to end the warmup time 
+ * 
+ * @param timer 		handle for the timer
+ */
+public Action:Timer_WarmupEnded(Handle:timer, any:data) {
+	// now end the warmup time
+	g_Warmup = false;
+#if defined DEBUG
+	SayToDeveloper(">>>>> Warmup time ended now!");
+#endif
+	return Plugin_Stop;
 }
 
 
@@ -958,37 +1023,39 @@ public Action:PlayerCommandHandler(client, args) {
  *
  */
 public Action:RankCommandHandler(client, args) {
-	decl String:strTarget[MAX_NAME_LENGTH];
-	new showClient = client;
-	if (args >= 1) {
-		// target specified, get client id
-		GetCmdArg(1, strTarget, sizeof(strTarget));
-		// target @me doesn't work because ProcessTargetString is performed server side - so replace it!
-		if (strcmp(strTarget, "@me", false) == 0)
-			Format(strTarget, sizeof(strTarget), "#%d", GetClientUserId(client));
-		new String:targetName[MAX_TARGET_LENGTH];
-		decl targetList[MAXPLAYERS + 1];
-		decl targetCount;
-		new bool:tn_is_ml;
-		if ((targetCount = ProcessTargetString(
-			strTarget, 
-			0, 
-			targetList, 
-			MAXPLAYERS, 
-			COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
-			targetName, 
-			sizeof(targetName), 
-			tn_is_ml)) <= 0) {
-				// TODO: check if target is a name, then search for it
-			ReplyToTargetError(client, targetCount);
-			return Plugin_Handled;
-		} else 
-			showClient = targetList[0];
-	}
-	if (g_PlayerDbId[showClient] > 0) {
-		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[showClient], GetTime() - g_MaxIdleSecs, g_PlayerDbId[showClient]);
-		SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
+	if (g_Enabled) {
+		decl String:strTarget[MAX_NAME_LENGTH];
+		new showClient = client;
+		if (args >= 1) {
+			// target specified, get client id
+			GetCmdArg(1, strTarget, sizeof(strTarget));
+			// target @me doesn't work because ProcessTargetString is performed server side - so replace it!
+			if (strcmp(strTarget, "@me", false) == 0)
+				Format(strTarget, sizeof(strTarget), "#%d", GetClientUserId(client));
+			new String:targetName[MAX_TARGET_LENGTH];
+			decl targetList[MAXPLAYERS + 1];
+			decl targetCount;
+			new bool:tn_is_ml;
+			if ((targetCount = ProcessTargetString(
+				strTarget, 
+				0, 
+				targetList, 
+				MAXPLAYERS, 
+				COMMAND_FILTER_CONNECTED + COMMAND_FILTER_NO_BOTS, 
+				targetName, 
+				sizeof(targetName), 
+				tn_is_ml)) <= 0) {
+					// TODO: check if target is a name, then search for it
+				ReplyToTargetError(client, targetCount);
+				return Plugin_Handled;
+			} else 
+				showClient = targetList[0];
+		}
+		if (g_PlayerDbId[showClient] > 0) {
+			decl String:Sql[SQL_MAX_LENGTH];
+			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[showClient], GetTime() - g_MaxIdleSecs, g_PlayerDbId[showClient]);
+			SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
+		}
 	}
 	return Plugin_Handled;
 }
@@ -1118,8 +1185,7 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 			i++;
 		}
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		new String:command[51] = COMMAND_TOP10;
-		ReplaceString(command, sizeof(command), "sm_", "", false);
+		new String:command[50] = COMMAND_TOP10;
 		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line3", client, command[3]);
 		panel.DrawText(panelLine);
 		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line4", client, command[3]);
@@ -1162,10 +1228,10 @@ public Action:DebugCommandHandler(client, args) {
 	PrintToServer("%s****", PLUGIN_LOGPREFIX);
 	PrintToServer("%sDebug command executed!!!", PLUGIN_LOGPREFIX);
 	PrintToServer("%s****", PLUGIN_LOGPREFIX);
+	PrintToChat(client, "%sWarmup: %d, AnnouncePlayer: %d, ShowPanels: %d, InformPoints: %d, Enabled: %d",
+		PLUGIN_LOGPREFIX, g_Warmup, g_AnnouncePlayers, g_ShowPanels, g_InformAboutPoints, g_Enabled);
 	PrintToChat(client, "\x01\\x01 \x02\\x02 \x03\\x03 \x04\\x04 \x05\\x05 \x06\\x06");
-	PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankAndCountry", 
-								"testplayer", "some country", -1, -99, -999, 
-								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+	
 	return Plugin_Handled;
 }
 #endif
@@ -1334,3 +1400,19 @@ GetClientFromUserID(const userid, const Handle:handle, const String:error[]) {
 	} else
 		return GetClientOfUserId(userid);
 }
+
+#if defined DEBUG
+/**
+ * Say something to almostagreatcoder!
+ */
+void SayToDeveloper(const String:msg[]) {
+	decl String:playerName[MAX_NAME_LENGTH];
+	for (new i = 1; i <= MaxClients; i++) {
+		if (IsClientConnected(i) && !IsFakeClient(i)) {
+			GetClientName(i, playerName, sizeof(playerName));
+			if (strcmp(playerName, "almostagreatplayer", false) == 0)
+				PrintToChat(i, msg);
+		}	
+	}
+}
+#endif
