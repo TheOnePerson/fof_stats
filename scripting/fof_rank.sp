@@ -44,7 +44,7 @@
 #define ENGINE_SQLITE
 
 // Uncomment the line below to get a whole bunch of PrintToServer debug messages...
-#define DEBUG
+//#define DEBUG
 
 #pragma semicolon 1
 
@@ -55,7 +55,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"0.8.0"
+#define PLUGIN_VERSION 		"0.9.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
@@ -72,7 +72,7 @@
 #define MAX_PANELLINE_LENGTH 80
 #define STEAMID_LENGTH 25
 #define DEFAULT_TP_WARMUPTIME 10
-#define DEFAULT_IDLESECS 60 * 24 * 60 * 60
+#define DEFAULT_IDLESECS 30 * 24 * 60 * 60
 
 #define COMMAND_TOP10 "sm_top10"
 #define COMMAND_RANK "sm_rank"
