@@ -53,13 +53,24 @@
 	);"
 	
 #define SQL_CREATE_TBL_WeaponStats "CREATE TABLE \"WeaponStats\" (  \
-	\"ServerID\"  INTEGER NOT NULL,  \
-	\"PlayerID\"  INTEGER NOT NULL,  \
-	\"WeaponIdx\"  INTEGER NOT NULL,  \
-	\"Kills\"  INTEGER NOT NULL DEFAULT 0,  \
-	\"Headshots\"  INTEGER NOT NULL DEFAULT 0,  \
-	PRIMARY KEY (\"ServerID\", \"PlayerID\", \"WeaponIdx\")  \
+	\"ServerID\"  INTEGER NOT NULL, \
+	\"PlayerID\"  INTEGER NOT NULL, \
+	\"WeaponIdx\"  INTEGER NOT NULL, \
+	\"Kills\"  INTEGER NOT NULL DEFAULT 0, \
+	\"Headshots\"  INTEGER NOT NULL DEFAULT 0, \
+	PRIMARY KEY (\"ServerID\", \"PlayerID\", \"WeaponIdx\") \
 	);"
+
+#define SQL_CREATE_TBL_KillLog "CREATE TABLE \"KillLog\" ( \
+	\"ServerID\"  INTEGER NOT NULL, \
+	\"KillerID\"  INTEGER NOT NULL, \
+	\"VictimID\"  INTEGER NOT NULL, \
+	\"WeaponIdx\"  INTEGER NOT NULL, \
+	\"Time\"  INTEGER NOT NULL DEFAULT 0, \
+	PRIMARY KEY (\"KillerID\", \"Time\", \"ServerID\") \
+	);"
+
+#define SQL_CREATE_TBL_KillLog_Idx1 "CREATE INDEX \"IDX_KillLog_Victim\" ON \"KillLog\" (\"VictimID\", \"Time\", \"ServerID\");"
 
 #define SQL_INSERT_PLAYER "INSERT OR REPLACE INTO Players(ID, Name, SteamID, IP) \
 	VALUES ((SELECT ID FROM Players WHERE SteamID = '%s'), '%s', '%s', '%s');"
@@ -119,6 +130,9 @@
 	COALESCE((SELECT Headshots FROM WeaponStats WHERE ServerID = %d and PlayerID = %d and WeaponIdx = %d) + %d, %d) \
 	);"
 
+#define SQL_INSERT_KILLLOG "INSERT OR REPLACE INTO KillLog(ServerID, KillerID, VictimID, WeaponIdx, Time) \
+	VALUES (%d, %d, %d, %d, %d);"
+
 #define SQL_SELECT_TOP10 "SELECT Name, p.ID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
 	 WHERE s.Lastenter > %d AND s.Spawns > 0 GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(TimeAlive) DESC, SUM(Logins) LIMIT %d, %d;"
 
@@ -129,4 +143,24 @@
 	SUM(s.Deaths) Deaths, SUM(s.UngracefulDeaths) Ungraceful, SUM(s.TimeAlive), SUM(s.Spawns) Spawns \
 	FROM Players p INNER JOIN PlayerStats s ON s.PlayerID = p.ID \
 	WHERE p.ID =  %i GROUP BY p.ID;"
+
+#define SQL_SELECT_SCHEMAVERSION "SELECT MAX(SchemaVersion) FROM Version;"
+
+#define SQL_INSERT_SCHEMAVERSION "INSERT INTO \"Version\"(\"SchemaVersion\") VALUES (%d);"
+
+#define SQL_SELECT_KILLERS "SELECT p.Name, count(*) \
+	FROM KillLog AS k \
+	INNER JOIN Players AS p ON p.ID = k.KillerID \
+	WHERE VictimID = %d AND Time > %d \
+	GROUP BY k.KillerID \
+	ORDER BY count(*) DESC, k.KillerID \
+	LIMIT %d;"
+
+#define SQL_SELECT_VICTIMS "SELECT p.Name, count(*) \
+	FROM KillLog AS k \
+	INNER JOIN Players AS p ON p.ID = k.VictimID \
+	WHERE KillerID = %d AND Time > %d \
+	GROUP BY k.VictimID \
+	ORDER BY count(*) DESC, k.VictimID \
+	LIMIT %d;"
 

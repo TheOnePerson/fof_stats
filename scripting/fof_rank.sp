@@ -55,10 +55,10 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"0.9.0"
+#define PLUGIN_VERSION 		"0.9.6"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
-#define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=??????"
+#define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
 
 #define CONFIG_FILENAME 	"fof_rank.cfg"
 #define TRANSLATIONS_FILENAME "fof_rank.phrases"
@@ -73,6 +73,7 @@
 #define STEAMID_LENGTH 25
 #define DEFAULT_TP_WARMUPTIME 10
 #define DEFAULT_IDLESECS 30 * 24 * 60 * 60
+#define KILLER_LIST_ITEMS 10
 
 #define COMMAND_TOP10 "sm_top10"
 #define COMMAND_RANK "sm_rank"
@@ -518,105 +519,112 @@ public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
  * Event Handler for PlayerDeath
  */
 public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) {
-	new victimId = GetEventInt(event, "userid");
-	new attackerId = GetEventInt(event, "attacker");
-	new assistId = GetEventInt(event, "assist");
-	new weaponIdx = GetEventInt(event, "weapon_index");
-	new bool:headshot = GetEventBool(event, "headshot");
-	decl String:weaponName[65];
-	GetEventString(event, "weapon", weaponName, sizeof(weaponName));
-	
+	if (!g_Warmup && g_Enabled) {
+		new victimId = GetEventInt(event, "userid");
+		new attackerId = GetEventInt(event, "attacker");
+		new assistId = GetEventInt(event, "assist");
+		new weaponIdx = GetEventInt(event, "weapon_index");
+		new bool:headshot = GetEventBool(event, "headshot");
+		decl String:weaponName[65];
+		GetEventString(event, "weapon", weaponName, sizeof(weaponName));
+		
 #if defined DEBUG
-	decl String:msg[255];
-	Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
-		victimId, attackerId, assistId, headshot, weaponIdx, weaponName);
-	//LogMessage(msg);
+		decl String:msg[255];
+		Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
+			victimId, attackerId, assistId, headshot, weaponIdx, weaponName);
+		//LogMessage(msg);
 #endif
-	
-	// reset victim's killstreak
-	decl String:Sql[SQL_MAX_LENGTH];
-	victimId = GetClientOfUserId(victimId);
-	attackerId = GetClientOfUserId(attackerId);
-	assistId = GetClientOfUserId(assistId);
-	if (g_PlayerDbId[victimId] > 0 && g_Enabled) {
-		g_PlayerKillstreak[victimId] = 0;
-		// increase victim's death counter, store time alive and substract points
-		new penaltyPoints = g_PointsPerDeath;
-		new ungraceful = 0;
-		if (weaponIdx == -1 || victimId == attackerId) {
-			// probably ungraceful death
-			penaltyPoints = g_PointsPerUngracefulDeath;
-			ungraceful = 1;
-		}
-		new timeAlive = RoundToZero(GetClientTime(victimId)) - g_PlayerSpawnedAt[victimId];
-		g_PlayerSpawnedAt[victimId] = 0;
-		Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungraceful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
-		SQL_TQuery(g_db, SQL_LogError, Sql);
-		// tell victim about his/her misery (in case there are points to loose)
-		if (penaltyPoints != 0 && g_InformAboutPoints)
-			if (ungraceful > 0)
-				if (penaltyPoints != 1)
-					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessage", -penaltyPoints);
-				else
-					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessageSingular");
-			else {
-				if (penaltyPoints != 1)
-					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints);
-				else
-					PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessageSingular");
+		
+		// reset victim's killstreak
+		decl String:Sql[SQL_MAX_LENGTH];
+		victimId = GetClientOfUserId(victimId);
+		attackerId = GetClientOfUserId(attackerId);
+		assistId = GetClientOfUserId(assistId);
+		if (g_PlayerDbId[victimId] > 0) {
+			g_PlayerKillstreak[victimId] = 0;
+			// increase victim's death counter, store time alive and substract points
+			new penaltyPoints = g_PointsPerDeath;
+			new ungraceful = 0;
+			if (weaponIdx == -1 || victimId == attackerId) {
+				// probably ungraceful death
+				penaltyPoints = g_PointsPerUngracefulDeath;
+				ungraceful = 1;
 			}
-	}
-	if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId && g_Enabled) {
-		// find the weapon data and give points to attacker
-		new rankPoints = GetKillPointsToWeaponIdx(weaponIdx, !headshot);
-		decl headshotInc;
-		if (headshot)
-			headshotInc = 1;
-		else
-			headshotInc = 0;
-		Format(Sql, sizeof(Sql), SQL_INSERT_WEAPONSTAT_KILLS, g_ServerID, g_PlayerDbId[attackerId], weaponIdx, 
-			g_ServerID, g_PlayerDbId[attackerId], weaponIdx,
-			g_ServerID, g_PlayerDbId[attackerId], weaponIdx, headshotInc, headshotInc);
-		SQL_TQuery(g_db, SQL_LogError, Sql);
-		Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, rankPoints, g_PlayerDbId[attackerId], g_ServerID);
-		SQL_TQuery(g_db, SQL_LogError, Sql);
-		// increase attacker's killstreak
-		g_PlayerKillstreak[attackerId]++;
-		if (g_PlayerKillstreak[attackerId] > g_PlayerMaxKillstreak[attackerId]) {
-			// new personal killstreak record: store it!
-			g_PlayerMaxKillstreak[attackerId] = g_PlayerKillstreak[attackerId];
-			Format(Sql, sizeof(Sql), SQL_UPDATE_KILLSTREAK, g_PlayerMaxKillstreak[attackerId], g_PlayerDbId[attackerId], g_ServerID);
+			new timeAlive = RoundToZero(GetClientTime(victimId)) - g_PlayerSpawnedAt[victimId];
+			g_PlayerSpawnedAt[victimId] = 0;
+			Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungraceful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
+			// tell victim about his/her misery (in case there are points to loose)
+			if (penaltyPoints != 0 && g_InformAboutPoints)
+				if (ungraceful > 0)
+					if (penaltyPoints != 1)
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessage", -penaltyPoints);
+					else
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessageSingular");
+				else {
+					if (penaltyPoints != 1)
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints);
+					else
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessageSingular");
+				}
 		}
-		// tell attacker about his/her fortune
-		if (g_InformAboutPoints) {
-			decl String:victimName[MAX_NAME_LENGTH];
-			GetClientName(victimId, victimName, sizeof(victimName));
+		if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId) {
+			// find the weapon data and give points to attacker
+			new rankPoints = GetKillPointsToWeaponIdx(weaponIdx, !headshot);
+			decl headshotInc;
 			if (headshot)
-				if (rankPoints != 1)
-					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessage", rankPoints, victimName);
-				else
-					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessageSingular", victimName);
+				headshotInc = 1;
 			else
-				if (rankPoints != 1)
-					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessage", rankPoints, victimName);
+				headshotInc = 0;
+			Format(Sql, sizeof(Sql), SQL_INSERT_WEAPONSTAT_KILLS, g_ServerID, g_PlayerDbId[attackerId], weaponIdx, 
+				g_ServerID, g_PlayerDbId[attackerId], weaponIdx,
+				g_ServerID, g_PlayerDbId[attackerId], weaponIdx, headshotInc, headshotInc);
+			SQL_TQuery(g_db, SQL_LogError, Sql);
+			Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, rankPoints, g_PlayerDbId[attackerId], g_ServerID);
+			SQL_TQuery(g_db, SQL_LogError, Sql);
+			// increase attacker's killstreak
+			g_PlayerKillstreak[attackerId]++;
+			if (g_PlayerKillstreak[attackerId] > g_PlayerMaxKillstreak[attackerId]) {
+				// new personal killstreak record: store it!
+				g_PlayerMaxKillstreak[attackerId] = g_PlayerKillstreak[attackerId];
+				Format(Sql, sizeof(Sql), SQL_UPDATE_KILLSTREAK, g_PlayerMaxKillstreak[attackerId], g_PlayerDbId[attackerId], g_ServerID);
+				SQL_TQuery(g_db, SQL_LogError, Sql);
+			}
+			// tell attacker about his/her fortune
+			if (g_InformAboutPoints) {
+				decl String:victimName[MAX_NAME_LENGTH];
+				GetClientName(victimId, victimName, sizeof(victimName));
+				if (headshot)
+					if (rankPoints != 1)
+						PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessage", rankPoints, victimName);
+					else
+						PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "HeadshotMessageSingular", victimName);
 				else
-					PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessageSingular", victimName);
+					if (rankPoints != 1)
+						PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessage", rankPoints, victimName);
+					else
+						PrintToChat(attackerId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "KillMessageSingular", victimName);
+			}
 		}
-	}
-	if (g_PlayerDbId[assistId] > 0 && g_PointsPerAssist != 0 && g_Enabled) {
-		// credit points to assisting player
-		Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, g_PointsPerAssist, g_PlayerDbId[assistId], g_ServerID);
-		SQL_TQuery(g_db, SQL_LogError, Sql);
-		// increase kill assists counter
-		Format(Sql, sizeof(Sql), SQL_UPDATE_KILLASSISTS, g_PlayerDbId[assistId], g_ServerID);
-		SQL_TQuery(g_db, SQL_LogError, Sql);
-		// tell assisting player about his/her fortune
-		if (g_InformAboutPoints) {
-			if (g_PointsPerAssist == 1)
-				PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessageSingular", g_PointsPerAssist);
-			else
-				PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessagePlural", g_PointsPerAssist);
+		if (g_PlayerDbId[assistId] > 0 && g_PointsPerAssist != 0) {
+			// credit points to assisting player
+			Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, g_PointsPerAssist, g_PlayerDbId[assistId], g_ServerID);
+			SQL_TQuery(g_db, SQL_LogError, Sql);
+			// increase kill assists counter
+			Format(Sql, sizeof(Sql), SQL_UPDATE_KILLASSISTS, g_PlayerDbId[assistId], g_ServerID);
+			SQL_TQuery(g_db, SQL_LogError, Sql);
+			// tell assisting player about his/her fortune
+			if (g_InformAboutPoints) {
+				if (g_PointsPerAssist == 1)
+					PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessageSingular", g_PointsPerAssist);
+				else
+					PrintToChat(assistId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "AssistMessagePlural", g_PointsPerAssist);
+			}
+		}
+		if (g_PlayerDbId[attackerId] > 0 && g_PlayerDbId[victimId] > 0) {
+			// write kill log
+			Format(Sql, sizeof(Sql), SQL_INSERT_KILLLOG, g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], weaponIdx, GetTime());
+			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 	}
 }
@@ -1138,6 +1146,12 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line9", client, kdRatio);
 		panel.DrawText(panelLine);
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers", client);
+		panel.DrawItem(panelLine);
+		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims", client);
+		panel.DrawItem(panelLine);
+		for (new i = 1; i <= 7; i++)
+			panel.DrawItem("", ITEMDRAW_NOTEXT);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
 		panel.Send(client, RankingPanelHandler, 60);
@@ -1150,11 +1164,97 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
  */
 public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int param2)
 {
-	if (g_CurrentMenuState[param1][0] >= 0)
-		InitRankList(param1, g_CurrentMenuState[param1][0], g_CurrentMenuState[param1][1]);
+#if defined DEBUG
+	PrintToServer("%s*** RankingPanelHandler *** action: %d, param1: %d", PLUGIN_LOGPREFIX, action, param1);
+#endif
+	if (action == MenuAction_Select) {
+		decl String:Sql[SQL_MAX_LENGTH];
+		if (g_PlayerDbId[param1] > 0) {
+			if (param2 == 1) {
+				// show killer list
+				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_PlayerDbId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
+				SQL_TQuery(g_db, SQL_InitKillersPanel, Sql, GetClientUserId(param1));
+			} else if (param2 == 2) {
+				// show victim list
+				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_PlayerDbId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
+				SQL_TQuery(g_db, SQL_InitVictimsPanel, Sql, GetClientUserId(param1));
+			}
+		} else if (action == MenuAction_Cancel || action == MenuAction_End)
+			if (g_CurrentMenuState[param1][0] >= 0)
+				InitRankList(param1, g_CurrentMenuState[param1][0], g_CurrentMenuState[param1][1]);
+	}
 }
- 
- 
+
+
+/**
+ * Callback after executing SQL / got the list of the killers!
+ */
+public void SQL_InitKillersPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	new client = GetClientFromUserID(data, hndl, error);
+	if (client > 0) {
+		decl String:playerName[MAX_NAME_LENGTH];
+		decl String:panelLine[MAX_PANELLINE_LENGTH];
+		Panel panel = new Panel();
+		Format(panelLine, sizeof(panelLine), "%T", "KillerlistTitle", client);
+		panel.SetTitle(panelLine);
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		new i = 1;
+		while (SQL_FetchRow(hndl) && i <= KILLER_LIST_ITEMS) {
+			SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
+			Format(panelLine, sizeof(panelLine), "%T", "KillerlistLine", client, i, playerName, SQL_FetchInt(hndl, 1));
+			panel.DrawText(panelLine);
+			i++;
+		}
+		if (i == 1) {
+			Format(panelLine, sizeof(panelLine), "%T", "KillerlistLine_empty", client);
+			panel.DrawText(panelLine);
+		}
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		for (i = 1; i <= 9; i++)
+			panel.DrawItem("", ITEMDRAW_NOTEXT);
+		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
+		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
+		panel.Send(client, EmptyPanelHandler, 60);
+		delete panel;
+	}
+}
+
+/**
+ * Callback after executing SQL / got the list of the victims!
+ */
+public void SQL_InitVictimsPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	new client = GetClientFromUserID(data, hndl, error);
+	if (client > 0) {
+		decl String:playerName[MAX_NAME_LENGTH];
+		decl String:panelLine[MAX_PANELLINE_LENGTH];
+		Panel panel = new Panel();
+		Format(panelLine, sizeof(panelLine), "%T", "VictimlistTitle", client);
+		panel.SetTitle(panelLine);
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		new i = 1;
+		while (SQL_FetchRow(hndl) && i <= KILLER_LIST_ITEMS) {
+			SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
+			Format(panelLine, sizeof(panelLine), "%T", "VictimlistLine", client, i, playerName, SQL_FetchInt(hndl, 1));
+			panel.DrawText(panelLine);
+			i++;
+		}
+		if (i == 1) {
+			Format(panelLine, sizeof(panelLine), "%T", "VictimlistLine_empty", client);
+			panel.DrawText(panelLine);
+		}
+		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+		for (i = 1; i <= 9; i++)
+			panel.DrawItem("", ITEMDRAW_NOTEXT);
+		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
+		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
+		panel.Send(client, EmptyPanelHandler, 60);
+		delete panel;
+	}
+}
+
+
 /**
  * Callback after executing SQL / got the top 3 for the explanation panel!
  */
@@ -1198,15 +1298,15 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, ExplainPanelHandler, 60);
+		panel.Send(client, EmptyPanelHandler, 60);
 		delete panel;
 	}
 }
 
 /**
- * Handler for explain panel events - nothing to do here yet...
+ * Handler for panel events - nothing is done here...
  */
-public int ExplainPanelHandler(Menu menu, MenuAction action, int param1, int param2)
+public int EmptyPanelHandler(Menu menu, MenuAction action, int param1, int param2)
 {
 	// really?
 }
@@ -1359,16 +1459,39 @@ public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:d
 void SQL_InitDB() {
  	
 	if (g_db != INVALID_HANDLE) {
+		// This is only the basic schema version, for updates view routine SQL_CheckVersion further down
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Players);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_Players_Idx);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx1);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx2);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx3);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Servers);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Version);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_WeaponStats);
-		// TODO: Check schema version and apply changes (currently there are none of these, so we're fine...)
+		SQL_FastQuery(g_db, SQL_CREATE_TBL_Players_Idx);
+		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx1);
+		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx2);
+		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx3);
+		// Check schema version and apply changes
+		SQL_TQuery(g_db, SQL_CheckVersion, SQL_SELECT_SCHEMAVERSION);
+	}
+}
+
+/**
+ * Callback after executing SQL: Check schema version
+ */
+public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	if (hndl != INVALID_HANDLE && strlen(error) == 0) {
+		new version = 1;
+		if (SQL_FetchRow(hndl)) {
+			version = SQL_FetchInt(hndl, 0);
+		}
+		if (version < 2) {
+			SQL_FastQuery(g_db, SQL_CREATE_TBL_KillLog);
+			SQL_FastQuery(g_db, SQL_CREATE_TBL_KillLog_Idx1);
+		}
+		// Save latest schema version
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 2);
+		SQL_FastQuery(g_db, Sql);
 	}
 }
 

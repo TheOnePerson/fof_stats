@@ -223,6 +223,48 @@
 		"en"		"Kill to death ratio: %4.2f"
 		"de"		"Verhältnis Kills zu Tode: %4.2f"
 	}
+	"RankPanel_ShowKillers"
+	{
+		"en"		"List my killers"
+		"de"		"Zeige meine Killer"
+	}
+	"RankPanel_ShowVictims"
+	{
+		"en"		"List my victims"
+		"de"		"Zeige meine Opfer"
+	}
+	"KillerlistTitle"
+	{
+		"en"		"These players killed you:"
+		"de"		"Spieler, die dich getötet haben:"
+	}
+	"KillerlistLine"
+	{
+		"#format"	"{1:i},{2:s},{3:i}"
+		"en"		"Killer No. {1}: {2} ({3} times)"
+		"de"		"Killer {1}: {2} ({3}x)"
+	}
+	"KillerlistLine_empty"
+	{
+		"en"		"- no one, congratulations! -"
+		"de"		"- niemand, Glückwunsch! -"
+	}
+	"VictimlistTitle"
+	{
+		"en"		"These were your victims:"
+		"de"		"Deine Opfer:"
+	}
+	"VictimlistLine"
+	{
+		"#format"	"{1:i},{2:s},{3:i}"
+		"en"		"Victim No. {1}: {2} ({3} times)"
+		"de"		"Opfer {1}: {2} ({3} Kills)"
+	}
+	"VictimlistLine_empty"
+	{
+		"en"		"- no one yet -"
+		"de"		"- noch niemand -"
+	}
 	"ExplainPanel_WelcomeTitle"
 	{
 		"en"		"Welcome, %s!"
