@@ -43,6 +43,7 @@
 */
 #define ENGINE_SQLITE
 
+
 // Uncomment the line below to get a whole bunch of PrintToServer debug messages...
 //#define DEBUG
 
@@ -55,7 +56,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"0.9.6"
+#define PLUGIN_VERSION 		"0.9.7"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -623,7 +624,8 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		}
 		if (g_PlayerDbId[attackerId] > 0 && g_PlayerDbId[victimId] > 0) {
 			// write kill log
-			Format(Sql, sizeof(Sql), SQL_INSERT_KILLLOG, g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], weaponIdx, GetTime());
+			Format(Sql, sizeof(Sql), SQL_INSERT_KILLLOG, g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], weaponIdx, 
+				g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], weaponIdx);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 	}
@@ -1172,11 +1174,13 @@ public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int par
 		if (g_PlayerDbId[param1] > 0) {
 			if (param2 == 1) {
 				// show killer list
-				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_PlayerDbId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
+				// TODO: make sure that inactive players are not counted here! (GetTime() - g_MaxIdleSecs)
+				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_PlayerDbId[param1], KILLER_LIST_ITEMS);
 				SQL_TQuery(g_db, SQL_InitKillersPanel, Sql, GetClientUserId(param1));
 			} else if (param2 == 2) {
 				// show victim list
-				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_PlayerDbId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
+				// TODO: make sure that inactive players are not counted here! (GetTime() - g_MaxIdleSecs)
+				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_PlayerDbId[param1], KILLER_LIST_ITEMS);
 				SQL_TQuery(g_db, SQL_InitVictimsPanel, Sql, GetClientUserId(param1));
 			}
 		} else if (action == MenuAction_Cancel || action == MenuAction_End)
@@ -1460,6 +1464,7 @@ void SQL_InitDB() {
  	
 	if (g_db != INVALID_HANDLE) {
 		// This is only the basic schema version, for updates view routine SQL_CheckVersion further down
+		SQL_LockDatabase(g_db);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Players);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_Servers);
@@ -1469,6 +1474,7 @@ void SQL_InitDB() {
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx1);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx2);
 		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx3);
+		SQL_UnlockDatabase(g_db);
 		// Check schema version and apply changes
 		SQL_TQuery(g_db, SQL_CheckVersion, SQL_SELECT_SCHEMAVERSION);
 	}
@@ -1484,13 +1490,24 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 		if (SQL_FetchRow(hndl)) {
 			version = SQL_FetchInt(hndl, 0);
 		}
+		SQL_LockDatabase(g_db);
 		if (version < 2) {
 			SQL_FastQuery(g_db, SQL_CREATE_TBL_KillLog);
 			SQL_FastQuery(g_db, SQL_CREATE_TBL_KillLog_Idx1);
 		}
+		if (version < 3) {
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_1);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_2);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_3);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_4);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_5);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_6);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_CLEANUP);
+		}
+		SQL_UnlockDatabase(g_db);
 		// Save latest schema version
 		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 2);
+		Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 3);
 		SQL_FastQuery(g_db, Sql);
 	}
 }

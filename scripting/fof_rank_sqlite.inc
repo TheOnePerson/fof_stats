@@ -11,15 +11,15 @@
 #define SQL_DBDRIVERNAME "sqlite"
 #define SQL_MAX_LENGTH 8192
 
-#define SQL_CREATE_TBL_Players "CREATE TABLE \"Players\" (  \
+#define SQL_CREATE_TBL_Players "CREATE TABLE IF NOT EXISTS \"Players\" (  \
 	\"ID\"  INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,  \
 	\"Name\"  TEXT NOT NULL DEFAULT '',  \
 	\"SteamID\"  TEXT NOT NULL,  \
 	\"IP\"  TEXT NOT NULL DEFAULT ''  \
 	);"
-#define SQL_CREATE_TBL_Players_Idx	"CREATE UNIQUE INDEX \"IDX_SteamID\" ON \"Players\" (\"SteamID\" ASC);"
+#define SQL_CREATE_TBL_Players_Idx	"CREATE UNIQUE INDEX IF NOT EXISTS \"IDX_SteamID\" ON \"Players\" (\"SteamID\" ASC);"
 
-#define SQL_CREATE_TBL_PlayerStats "CREATE TABLE \"PlayerStats\" ( \
+#define SQL_CREATE_TBL_PlayerStats "CREATE TABLE IF NOT EXISTS \"PlayerStats\" ( \
 	\"PlayerID\"  INTEGER NOT NULL,  \
 	\"ServerID\"  INTEGER NOT NULL,  \
 	\"Logins\"  INTEGER NOT NULL DEFAULT 0,  \
@@ -35,24 +35,24 @@
 	PRIMARY KEY (\"PlayerID\" ASC, \"ServerID\" ASC)  \
 	);"
 
-#define SQL_CREATE_TBL_PlayerStats_Idx1 "CREATE INDEX \"main\".\"IDX_PlayerStats_Points\" ON \"PlayerStats\" (\"Points\" ASC);"
+#define SQL_CREATE_TBL_PlayerStats_Idx1 "CREATE INDEX IF NOT EXISTS \"main\".\"IDX_PlayerStats_Points\" ON \"PlayerStats\" (\"Points\" ASC);"
 
-#define SQL_CREATE_TBL_PlayerStats_Idx2 "CREATE INDEX \"main\".\"IDX_PlayerStats_Killstreak\" ON \"PlayerStats\" (\"Killstreak\" ASC);"
+#define SQL_CREATE_TBL_PlayerStats_Idx2 "CREATE INDEX IF NOT EXISTS \"main\".\"IDX_PlayerStats_Killstreak\" ON \"PlayerStats\" (\"Killstreak\" ASC);"
 
-#define SQL_CREATE_TBL_PlayerStats_Idx3 "CREATE INDEX \"IDX_PlayerStats_Lastenter\" ON \"PlayerStats\" (\"Lastenter\" ASC);"
+#define SQL_CREATE_TBL_PlayerStats_Idx3 "CREATE INDEX IF NOT EXISTS \"IDX_PlayerStats_Lastenter\" ON \"PlayerStats\" (\"Lastenter\" ASC);"
 
-#define SQL_CREATE_TBL_Servers "CREATE TABLE \"Servers\" (  \
+#define SQL_CREATE_TBL_Servers "CREATE TABLE IF NOT EXISTS \"Servers\" (  \
 	\"ID\"  INTEGER NOT NULL,  \
 	\"Name\"  TEXT NOT NULL,  \
 	\"SteamAppID\"  INTEGER NOT NULL DEFAULT 0,  \
 	PRIMARY KEY (\"ID\" ASC) \
 	);"
 	
-#define SQL_CREATE_TBL_Version "CREATE TABLE \"Version\" (  \
+#define SQL_CREATE_TBL_Version "CREATE TABLE IF NOT EXISTS \"Version\" (  \
 	\"SchemaVersion\"  INTEGER NOT NULL DEFAULT 0  \
 	);"
 	
-#define SQL_CREATE_TBL_WeaponStats "CREATE TABLE \"WeaponStats\" (  \
+#define SQL_CREATE_TBL_WeaponStats "CREATE TABLE IF NOT EXISTS \"WeaponStats\" (  \
 	\"ServerID\"  INTEGER NOT NULL, \
 	\"PlayerID\"  INTEGER NOT NULL, \
 	\"WeaponIdx\"  INTEGER NOT NULL, \
@@ -61,7 +61,7 @@
 	PRIMARY KEY (\"ServerID\", \"PlayerID\", \"WeaponIdx\") \
 	);"
 
-#define SQL_CREATE_TBL_KillLog "CREATE TABLE \"KillLog\" ( \
+#define SQL_CREATE_TBL_KillLog "CREATE TABLE IF NOT EXISTS \"KillLog\" ( \
 	\"ServerID\"  INTEGER NOT NULL, \
 	\"KillerID\"  INTEGER NOT NULL, \
 	\"VictimID\"  INTEGER NOT NULL, \
@@ -70,7 +70,7 @@
 	PRIMARY KEY (\"KillerID\", \"Time\", \"ServerID\") \
 	);"
 
-#define SQL_CREATE_TBL_KillLog_Idx1 "CREATE INDEX \"IDX_KillLog_Victim\" ON \"KillLog\" (\"VictimID\", \"Time\", \"ServerID\");"
+#define SQL_CREATE_TBL_KillLog_Idx1 "CREATE INDEX IF NOT EXISTS \"IDX_KillLog_Victim\" ON \"KillLog\" (\"VictimID\", \"Time\", \"ServerID\");"
 
 #define SQL_INSERT_PLAYER "INSERT OR REPLACE INTO Players(ID, Name, SteamID, IP) \
 	VALUES ((SELECT ID FROM Players WHERE SteamID = '%s'), '%s', '%s', '%s');"
@@ -130,8 +130,9 @@
 	COALESCE((SELECT Headshots FROM WeaponStats WHERE ServerID = %d and PlayerID = %d and WeaponIdx = %d) + %d, %d) \
 	);"
 
-#define SQL_INSERT_KILLLOG "INSERT OR REPLACE INTO KillLog(ServerID, KillerID, VictimID, WeaponIdx, Time) \
-	VALUES (%d, %d, %d, %d, %d);"
+#define SQL_INSERT_KILLLOG "INSERT OR REPLACE INTO KillLog(ServerID, KillerID, VictimID, WeaponIdx, Kills) \
+	VALUES (%d, %d, %d, %d, \
+	COALESCE((SELECT Kills FROM KillLog WHERE ServerID = %d and KillerID = %d and VictimID = %d and WeaponIdx = %d) + 1, 1));"
 
 #define SQL_SELECT_TOP10 "SELECT Name, p.ID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
 	 WHERE s.Lastenter > %d AND s.Spawns > 0 GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(TimeAlive) DESC, SUM(Logins) LIMIT %d, %d;"
@@ -148,19 +149,43 @@
 
 #define SQL_INSERT_SCHEMAVERSION "INSERT INTO \"Version\"(\"SchemaVersion\") VALUES (%d);"
 
-#define SQL_SELECT_KILLERS "SELECT p.Name, count(*) \
+#define SQL_SELECT_KILLERS "SELECT p.Name, SUM(Kills) \
 	FROM KillLog AS k \
 	INNER JOIN Players AS p ON p.ID = k.KillerID \
-	WHERE VictimID = %d AND Time > %d \
+	WHERE VictimID = %d \
 	GROUP BY k.KillerID \
-	ORDER BY count(*) DESC, k.KillerID \
+	ORDER BY SUM(Kills) DESC, k.KillerID \
 	LIMIT %d;"
 
-#define SQL_SELECT_VICTIMS "SELECT p.Name, count(*) \
+#define SQL_SELECT_VICTIMS "SELECT p.Name, SUM(Kills) \
 	FROM KillLog AS k \
 	INNER JOIN Players AS p ON p.ID = k.VictimID \
-	WHERE KillerID = %d AND Time > %d \
+	WHERE KillerID = %d \
 	GROUP BY k.VictimID \
-	ORDER BY count(*) DESC, k.VictimID \
+	ORDER BY SUM(Kills) DESC, k.VictimID \
 	LIMIT %d;"
+
+#define SQL_SCHEMA_VERSION_3_1 "ALTER TABLE \"KillLog\" RENAME TO \"_KillLog_old_20170628\";"
+
+#define SQL_SCHEMA_VERSION_3_2 "DROP INDEX \"IDX_KillLog_Victim\";"
+
+#define SQL_SCHEMA_VERSION_3_3 "CREATE TABLE IF NOT EXISTS \"KillLog\" ( \
+	\"ServerID\"  INTEGER NOT NULL, \
+	\"KillerID\"  INTEGER NOT NULL, \
+	\"VictimID\"  INTEGER NOT NULL, \
+	\"WeaponIdx\"  INTEGER NOT NULL, \
+	\"Kills\"  INTEGER NOT NULL DEFAULT 0, \
+	PRIMARY KEY (\"ServerID\" ASC, \"KillerID\" ASC, \"VictimID\", \"WeaponIdx\"));"
+
+#define SQL_SCHEMA_VERSION_3_4 "INSERT INTO \"KillLog\" (\"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\", \"Kills\") \
+	SELECT \"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\", COUNT(*) \
+	FROM \"_KillLog_old_20170628\" \
+	GROUP BY \"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\" \
+	ORDER BY \"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\";"
+
+#define SQL_SCHEMA_VERSION_3_5 "CREATE INDEX \"IDX_KillLog_Victim\" ON \"KillLog\" (\"VictimID\" ASC, \"KillerID\" ASC);"
+
+#define SQL_SCHEMA_VERSION_3_6 "DROP TABLE \"_KillLog_old_20170628\";"
+
+#define SQL_SCHEMA_VERSION_CLEANUP "VACUUM;"
 
