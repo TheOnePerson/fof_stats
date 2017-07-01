@@ -86,6 +86,7 @@
 #define CVAR_ANNOUNCEPLAYERS "sm_rank_announceplayers"
 #define CVAR_SHOWPANELS "sm_rank_showpanels"
 #define CVAR_INFORMPOINTS "sm_rank_informpoints"
+#define CVAR_ROUNDSUMMARY "sm_rank_roundsummary"
 
 #if defined ENGINE_SQLITE
 	#include <fof_rank_sqlite.inc>	// SQLite specific declarations
@@ -116,6 +117,7 @@ new Handle:g_CvarEnabled = INVALID_HANDLE;
 new Handle:g_CvarAnnouncePlayers = INVALID_HANDLE;
 new Handle:g_CvarShowPanels = INVALID_HANDLE;
 new Handle:g_CvarInformPoints = INVALID_HANDLE;
+new Handle:g_CvarRoundSummary = INVALID_HANDLE;
 new Handle:g_CvarFofCurrentMode = INVALID_HANDLE;
 new Handle:g_CvarFofWarmupTime = INVALID_HANDLE;
 
@@ -145,6 +147,7 @@ new bool:g_Warmup = false;
 new bool:g_AnnouncePlayers = true;
 new bool:g_ShowPanels = true;
 new bool:g_InformAboutPoints = true;
+new bool:g_RoundSummary = true;
 new g_MaxIdleSecs = DEFAULT_IDLESECS;
 new g_ActivePlayers = 0;
 new g_DefaultPointsPerKill = 3;
@@ -171,6 +174,7 @@ public OnPluginStart() {
 	g_CvarAnnouncePlayers = CreateConVar(CVAR_ANNOUNCEPLAYERS, "1", "If set to 1, every new player is announced to others on login.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_CvarShowPanels = CreateConVar(CVAR_SHOWPANELS, "1", "If set to 1, a connecting player is presented a ranking information panel.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_CvarInformPoints = CreateConVar(CVAR_INFORMPOINTS, "1", "If set to 1, every player gets ranking information on kills or deaths as chat messages.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_CvarRoundSummary = CreateConVar(CVAR_ROUNDSUMMARY, "1", "If set to 1, every player sees a summary about his/her rank and gained/lost points at the end of each round.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_CvarFofCurrentMode = FindConVar("fof_sv_currentmode");
 	g_CvarFofWarmupTime = FindConVar("fof_sv_obj_warmuptime");
 	
@@ -187,7 +191,8 @@ public OnPluginStart() {
 	HookConVarChange(g_CvarAnnouncePlayers, CVar_AnnouncePlayersChanged);
 	HookConVarChange(g_CvarShowPanels, CVar_ShowPanelsChanged);
 	HookConVarChange(g_CvarInformPoints, CVar_InformPointsChanged);
-
+	HookConVarChange(g_CvarRoundSummary, CVar_RoundSummaryChanged);
+	
 	SQL_OpenDB();
 	
 	AutoExecConfig();
@@ -242,6 +247,9 @@ public CVar_ShowPanelsChanged(Handle:cvar, const String:oldval[], const String:n
 }
 public CVar_InformPointsChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
 	g_InformAboutPoints = !(strcmp(newval, "0") == 0);
+}
+public CVar_RoundSummaryChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+	g_RoundSummary = !(strcmp(newval, "0") == 0);
 }
 
 
@@ -1075,8 +1083,11 @@ Action:InitRankCommand(client, args, databaseid = -1) {
 				return Plugin_Handled;
 			} else 
 				showPlayerId = g_PlayerDbId[targetList[0]];
-		} else if (databaseid > 0)
+		}
+		if (databaseid > 0)
 			showPlayerId = databaseid;
+		else
+			g_CurrentMenuState[client][0] = -1;
 		if (showPlayerId > 0) {
 			decl String:Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, showPlayerId, GetTime() - g_MaxIdleSecs, showPlayerId);
@@ -1099,7 +1110,7 @@ public void SQL_GotRankForStatisticsPanel(Handle:owner, Handle:hndl, const Strin
 			showPlayerId = SQL_FetchInt(hndl, 0);
 			rank = SQL_FetchInt(hndl, 1);
 		}
-		g_CurrentMenuState[client][0] = -1;
+		//g_CurrentMenuState[client][0] = -1;
 		decl String:Sql[SQL_MAX_LENGTH];
 		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, rank, showPlayerId);
 #if defined DEBUG
@@ -1124,7 +1135,7 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		new timeSinceSpawn = RoundToZero(GetClientTime(client)) - g_PlayerSpawnedAt[client];
 		new timeAlive = SQL_FetchInt(hndl, 10) + timeSinceSpawn;
 #if defined DEBUG
-		PrintToServer("%s*** SQL_InitRankingPanel *** TimeAlive=%d, g_PlayerSpawnedAt=%d, delta=%d", PLUGIN_LOGPREFIX, timeAlive, g_PlayerSpawnedAt[client], timeSinceSpawn);
+		PrintToServer("%s*** SQL_InitRankingPanel *** TimeAlive=%d, CurrentMenuState=%d, g_PlayerSpawnedAt=%d, delta=%d", PLUGIN_LOGPREFIX, timeAlive, g_CurrentMenuState[client][0], g_PlayerSpawnedAt[client], timeSinceSpawn);
 #endif
 		new spawns = SQL_FetchInt(hndl, 11);
 		
@@ -1193,20 +1204,18 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int param2)
 {
 #if defined DEBUG
-	PrintToServer("%s*** RankingPanelHandler *** action: %d, param1: %d, param2: %d", PLUGIN_LOGPREFIX, action, param1, param2);
+	PrintToServer("%s*** RankingPanelHandler *** action: %d, param1: %d, param2: %d / g_CurrentMenuState: %d", PLUGIN_LOGPREFIX, action, param1, param2, g_CurrentMenuState[param1][0]);
 #endif
 	if (action == MenuAction_Select) {
 		decl String:Sql[SQL_MAX_LENGTH];
 		if (g_CurrentStatsPlayerId[param1] > 0) {
 			if (param2 == 1) {
 				// show killer list
-				// TODO: make sure that inactive players are not counted here! (GetTime() - g_MaxIdleSecs)
-				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_CurrentStatsPlayerId[param1], KILLER_LIST_ITEMS);
+				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_CurrentStatsPlayerId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
 				SQL_TQuery(g_db, SQL_InitKillersPanel, Sql, GetClientUserId(param1));
 			} else if (param2 == 2) {
 				// show victim list
-				// TODO: make sure that inactive players are not counted here! (GetTime() - g_MaxIdleSecs)
-				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_CurrentStatsPlayerId[param1], KILLER_LIST_ITEMS);
+				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_CurrentStatsPlayerId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
 				SQL_TQuery(g_db, SQL_InitVictimsPanel, Sql, GetClientUserId(param1));
 			} else if (param2 == 10) {
 				if (g_CurrentMenuState[param1][0] >= 0)

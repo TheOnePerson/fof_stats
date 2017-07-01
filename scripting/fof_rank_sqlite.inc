@@ -152,18 +152,22 @@
 #define SQL_SELECT_KILLERS "SELECT p.Name, SUM(Kills), p2.Name \
 	FROM KillLog AS k \
 	INNER JOIN Players AS p ON p.ID = k.KillerID \
+	INNER JOIN PlayerStats AS s ON p.ID = s.PlayerID \
 	INNER JOIN Players AS p2 ON p2.ID = k.VictimID \
 	WHERE VictimID = %d \
 	GROUP BY k.KillerID \
+	HAVING MAX(s.Lastenter) > %d AND SUM(s.Spawns) > 0 \
 	ORDER BY SUM(Kills) DESC, k.KillerID \
 	LIMIT %d;"
 
 #define SQL_SELECT_VICTIMS "SELECT p.Name, SUM(Kills), p2.Name \
 	FROM KillLog AS k \
 	INNER JOIN Players AS p ON p.ID = k.VictimID \
+	INNER JOIN PlayerStats AS s ON p.ID = s.PlayerID \
 	INNER JOIN Players AS p2 ON p2.ID = k.KillerID \
 	WHERE KillerID = %d \
 	GROUP BY k.VictimID \
+	HAVING MAX(s.Lastenter) > %d AND SUM(s.Spawns) > 0 \
 	ORDER BY SUM(Kills) DESC, k.VictimID \
 	LIMIT %d;"
 
