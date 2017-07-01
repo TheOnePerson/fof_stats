@@ -149,17 +149,19 @@
 
 #define SQL_INSERT_SCHEMAVERSION "INSERT INTO \"Version\"(\"SchemaVersion\") VALUES (%d);"
 
-#define SQL_SELECT_KILLERS "SELECT p.Name, SUM(Kills) \
+#define SQL_SELECT_KILLERS "SELECT p.Name, SUM(Kills), p2.Name \
 	FROM KillLog AS k \
 	INNER JOIN Players AS p ON p.ID = k.KillerID \
+	INNER JOIN Players AS p2 ON p2.ID = k.VictimID \
 	WHERE VictimID = %d \
 	GROUP BY k.KillerID \
 	ORDER BY SUM(Kills) DESC, k.KillerID \
 	LIMIT %d;"
 
-#define SQL_SELECT_VICTIMS "SELECT p.Name, SUM(Kills) \
+#define SQL_SELECT_VICTIMS "SELECT p.Name, SUM(Kills), p2.Name \
 	FROM KillLog AS k \
 	INNER JOIN Players AS p ON p.ID = k.VictimID \
+	INNER JOIN Players AS p2 ON p2.ID = k.KillerID \
 	WHERE KillerID = %d \
 	GROUP BY k.VictimID \
 	ORDER BY SUM(Kills) DESC, k.VictimID \

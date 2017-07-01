@@ -228,15 +228,25 @@
 		"en"		"List my killers"
 		"de"		"Zeige meine Killer"
 	}
+	"RankPanel_ShowKillers3rd"
+	{
+		"en"		"List this player's killers"
+		"de"		"Zeige Killer dieses Spielers"
+	}
 	"RankPanel_ShowVictims"
 	{
 		"en"		"List my victims"
 		"de"		"Zeige meine Opfer"
 	}
+	"RankPanel_ShowVictims3rd"
+	{
+		"en"		"List this player's victims"
+		"de"		"Zeige Opfer dieses Spielers"
+	}
 	"KillerlistTitle"
 	{
-		"en"		"These players killed you:"
-		"de"		"Spieler, die dich getötet haben:"
+		"en"		"Top 10 killers of %s:"
+		"de"		"Killer-Top-10 von %s:"
 	}
 	"KillerlistLine"
 	{
@@ -251,8 +261,8 @@
 	}
 	"VictimlistTitle"
 	{
-		"en"		"These were your victims:"
-		"de"		"Deine Opfer:"
+		"en"		"Top 10 victims of %s:"
+		"de"		"Opfer-Top-10 von %s:"
 	}
 	"VictimlistLine"
 	{

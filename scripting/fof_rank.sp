@@ -56,7 +56,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"0.9.7"
+#define PLUGIN_VERSION 		"0.9.8"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -125,9 +125,10 @@ new Handle:g_WeaponDetails = INVALID_HANDLE;		// list of arrays holding the poin
 // global static arrays
 new g_PlayerMaxKillstreak[MAXPLAYERS + 1];		// array for storing max killstreak of players (easier to handle than always requesting from db)
 new g_PlayerKillstreak[MAXPLAYERS + 1];			// array for current killstreak of players
-new g_PlayerPreviousLogin[MAXPLAYERS + 1];				// needed for welcome panel on spawns
+new g_PlayerPreviousLogin[MAXPLAYERS + 1];		// needed for welcome panel on spawns
 new g_PlayerSpawnedAt[MAXPLAYERS + 1];			// array for keeping track of the time alive of a player
 new g_CurrentMenuState[MAXPLAYERS + 1][2];		// for storing the state of the ranking list menu when a ranking panel is displayed as a sub menu
+new g_CurrentStatsPlayerId[MAXPLAYERS + 1];		// for storing the id of the player whose statistics are currently shown on a panel
 new g_PlayerDbId[MAXPLAYERS + 1];
 new bool:g_PlayerSilentInit[MAXPLAYERS + 1];	// array to determine if player data should be loaded silently during plugin startup
 
@@ -160,6 +161,7 @@ new g_PointsPerUngracefulDeath = -4;
 public OnPluginStart() {
 	
 	LoadTranslations("common.phrases");
+	LoadTranslations("core.phrases");
 	LoadTranslations(TRANSLATIONS_FILENAME);
 	
 	g_WeaponDetails = CreateArray(enumConfigWeaponDetails);
@@ -1033,15 +1035,28 @@ public Action:PlayerCommandHandler(client, args) {
  *
  */
 public Action:RankCommandHandler(client, args) {
+	return InitRankCommand(client, args);
+}
+
+/**
+ * Initializes the rank panel as a command
+ * 
+ * @param client 	client id
+ * @args			Arguments given for the command
+ * @databaseid		if set, this players database id will be shown
+ *
+ */
+Action:InitRankCommand(client, args, databaseid = -1) {
 	if (g_Enabled) {
 		decl String:strTarget[MAX_NAME_LENGTH];
-		new showClient = client;
+		new showPlayerId = g_PlayerDbId[client];
 		if (args >= 1) {
 			// target specified, get client id
 			GetCmdArg(1, strTarget, sizeof(strTarget));
 			// target @me doesn't work because ProcessTargetString is performed server side - so replace it!
 			if (strcmp(strTarget, "@me", false) == 0)
 				Format(strTarget, sizeof(strTarget), "#%d", GetClientUserId(client));
+			// analyse target string
 			new String:targetName[MAX_TARGET_LENGTH];
 			decl targetList[MAXPLAYERS + 1];
 			decl targetCount;
@@ -1059,11 +1074,12 @@ public Action:RankCommandHandler(client, args) {
 				ReplyToTargetError(client, targetCount);
 				return Plugin_Handled;
 			} else 
-				showClient = targetList[0];
-		}
-		if (g_PlayerDbId[showClient] > 0) {
+				showPlayerId = g_PlayerDbId[targetList[0]];
+		} else if (databaseid > 0)
+			showPlayerId = databaseid;
+		if (showPlayerId > 0) {
 			decl String:Sql[SQL_MAX_LENGTH];
-			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[showClient], GetTime() - g_MaxIdleSecs, g_PlayerDbId[showClient]);
+			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, showPlayerId, GetTime() - g_MaxIdleSecs, showPlayerId);
 			SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
 		}
 	}
@@ -1104,6 +1120,7 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
 		new kills = SQL_FetchInt(hndl, 4);
 		new deaths = SQL_FetchInt(hndl, 8);
+		g_CurrentStatsPlayerId[client] = SQL_FetchInt(hndl, 0);
 		new timeSinceSpawn = RoundToZero(GetClientTime(client)) - g_PlayerSpawnedAt[client];
 		new timeAlive = SQL_FetchInt(hndl, 10) + timeSinceSpawn;
 #if defined DEBUG
@@ -1148,10 +1165,19 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line9", client, kdRatio);
 		panel.DrawText(panelLine);
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers", client);
-		panel.DrawItem(panelLine);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims", client);
-		panel.DrawItem(panelLine);
+		if (g_PlayerDbId[client] == SQL_FetchInt(hndl, 0)) {
+			// player watches her/his own statistics
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers", client);
+			panel.DrawItem(panelLine);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims", client);
+			panel.DrawItem(panelLine);
+		} else {
+			// player watches statistics of somebody else
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers3rd", client);
+			panel.DrawItem(panelLine);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims3rd", client);
+			panel.DrawItem(panelLine);
+		}
 		for (new i = 1; i <= 7; i++)
 			panel.DrawItem("", ITEMDRAW_NOTEXT);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
@@ -1167,21 +1193,24 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int param2)
 {
 #if defined DEBUG
-	PrintToServer("%s*** RankingPanelHandler *** action: %d, param1: %d", PLUGIN_LOGPREFIX, action, param1);
+	PrintToServer("%s*** RankingPanelHandler *** action: %d, param1: %d, param2: %d", PLUGIN_LOGPREFIX, action, param1, param2);
 #endif
 	if (action == MenuAction_Select) {
 		decl String:Sql[SQL_MAX_LENGTH];
-		if (g_PlayerDbId[param1] > 0) {
+		if (g_CurrentStatsPlayerId[param1] > 0) {
 			if (param2 == 1) {
 				// show killer list
 				// TODO: make sure that inactive players are not counted here! (GetTime() - g_MaxIdleSecs)
-				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_PlayerDbId[param1], KILLER_LIST_ITEMS);
+				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_CurrentStatsPlayerId[param1], KILLER_LIST_ITEMS);
 				SQL_TQuery(g_db, SQL_InitKillersPanel, Sql, GetClientUserId(param1));
 			} else if (param2 == 2) {
 				// show victim list
 				// TODO: make sure that inactive players are not counted here! (GetTime() - g_MaxIdleSecs)
-				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_PlayerDbId[param1], KILLER_LIST_ITEMS);
+				Format(Sql, sizeof(Sql), SQL_SELECT_VICTIMS, g_CurrentStatsPlayerId[param1], KILLER_LIST_ITEMS);
 				SQL_TQuery(g_db, SQL_InitVictimsPanel, Sql, GetClientUserId(param1));
+			} else if (param2 == 10) {
+				if (g_CurrentMenuState[param1][0] >= 0)
+					InitRankList(param1, g_CurrentMenuState[param1][0], g_CurrentMenuState[param1][1]);
 			}
 		} else if (action == MenuAction_Cancel || action == MenuAction_End)
 			if (g_CurrentMenuState[param1][0] >= 0)
@@ -1200,11 +1229,14 @@ public void SQL_InitKillersPanel(Handle:owner, Handle:hndl, const String:error[]
 		decl String:playerName[MAX_NAME_LENGTH];
 		decl String:panelLine[MAX_PANELLINE_LENGTH];
 		Panel panel = new Panel();
-		Format(panelLine, sizeof(panelLine), "%T", "KillerlistTitle", client);
-		panel.SetTitle(panelLine);
-		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		new i = 1;
 		while (SQL_FetchRow(hndl) && i <= KILLER_LIST_ITEMS) {
+			if (i == 1) {
+				SQL_FetchString(hndl, 2, playerName, MAX_NAME_LENGTH);
+				Format(panelLine, sizeof(panelLine), "%T", "KillerlistTitle", client, playerName);
+				panel.SetTitle(panelLine);
+				panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+			}		
 			SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
 			Format(panelLine, sizeof(panelLine), "%T", "KillerlistLine", client, i, playerName, SQL_FetchInt(hndl, 1));
 			panel.DrawText(panelLine);
@@ -1219,7 +1251,7 @@ public void SQL_InitKillersPanel(Handle:owner, Handle:hndl, const String:error[]
 			panel.DrawItem("", ITEMDRAW_NOTEXT);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, EmptyPanelHandler, 60);
+		panel.Send(client, RankingSubpanelHandler, 60);
 		delete panel;
 	}
 }
@@ -1234,11 +1266,14 @@ public void SQL_InitVictimsPanel(Handle:owner, Handle:hndl, const String:error[]
 		decl String:playerName[MAX_NAME_LENGTH];
 		decl String:panelLine[MAX_PANELLINE_LENGTH];
 		Panel panel = new Panel();
-		Format(panelLine, sizeof(panelLine), "%T", "VictimlistTitle", client);
-		panel.SetTitle(panelLine);
-		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		new i = 1;
 		while (SQL_FetchRow(hndl) && i <= KILLER_LIST_ITEMS) {
+			if (i == 1) {
+				SQL_FetchString(hndl, 2, playerName, MAX_NAME_LENGTH);
+				Format(panelLine, sizeof(panelLine), "%T", "VictimlistTitle", client, playerName);
+				panel.SetTitle(panelLine);
+				panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+			}		
 			SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
 			Format(panelLine, sizeof(panelLine), "%T", "VictimlistLine", client, i, playerName, SQL_FetchInt(hndl, 1));
 			panel.DrawText(panelLine);
@@ -1251,14 +1286,27 @@ public void SQL_InitVictimsPanel(Handle:owner, Handle:hndl, const String:error[]
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		for (i = 1; i <= 9; i++)
 			panel.DrawItem("", ITEMDRAW_NOTEXT);
-		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
+		Format(panelLine, sizeof(panelLine), "%T", "Back", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, EmptyPanelHandler, 60);
+		panel.Send(client, RankingSubpanelHandler, 60);
 		delete panel;
 	}
 }
 
-
+/**
+ * Handler for ranking subpanels: go back to ranking panel
+ */
+public int RankingSubpanelHandler(Menu menu, MenuAction action, int param1, int param2)
+{
+#if defined DEBUG
+	PrintToServer("%s*** RankingSubpanelHandler *** action: %d, param1: %d, param2: %d, dbid: %d", PLUGIN_LOGPREFIX, action, param1, param2, g_CurrentStatsPlayerId[param1]);
+#endif
+	if (g_CurrentStatsPlayerId[param1] > 0) {
+		// fake issuing a rank command with db id as parameter
+		InitRankCommand(param1, 0, g_CurrentStatsPlayerId[param1]);
+	}
+}
+ 
 /**
  * Callback after executing SQL / got the top 3 for the explanation panel!
  */
