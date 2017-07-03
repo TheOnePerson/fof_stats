@@ -56,15 +56,15 @@
 	}
 	"AnnounceWithRankAndCountry"
 	{
-		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s},{8:s},{9:s}"
-		"en"		"{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {5} Points!"
-		"de"		"{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!"
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s},{8:s},{9:s},{10:s},{11:s}"
+		"en"		"{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {10}{5}{11} Points!"
+		"de"		"{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {10}{5}{11} Punkten!"
 	}
 	"AnnounceWithRankAndCountryNo1"
 	{
-		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s}{8:s},{9:s},{10:s}"
-		"en"		"{10}Buckle up! The No. 1 is coming!\n{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {5} Points!"
-		"de"		"{10}Schnallt euch an! Die Nummer 1 kommt!\n{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {5} Punkten!"
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s}{8:s},{9:s},{10:s},{11:s},{12:s}"
+		"en"		"{10}Buckle up! The No. 1 is coming!\n{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {11}{5}{12} Points!"
+		"de"		"{10}Schnallt euch an! Die Nummer 1 kommt!\n{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {11}{5}{12} Punkten!"
 	}
 	"AnnounceWithCountry"
 	{
@@ -74,21 +74,51 @@
 	}
 	"AnnounceWithRank"
 	{
-		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
-		"en"		"{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {4} Points!"
-		"de"		"{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!"
+		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s},{10:s}"
+		"en"		"{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {9}{4}{10} Points!"
+		"de"		"{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {9}{4}{10} Punkten!"
 	}
 	"AnnounceWithRankNo1"
 	{
-		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s}"
-		"en"		"{9}Buckle up! Here comes No. 1!!!\n{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {4} Points!"
-		"de"		"{9}Hier kommt die Nummer 1!!!\n{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {4} Punkten!"
+		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s},{10:s},{11:s}"
+		"en"		"{9}Buckle up! Here comes No. 1!!!\n{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {10}{4}{11} Points!"
+		"de"		"{9}Hier kommt die Nummer 1!!!\n{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {10}{4}{11} Punkten!"
 	}
 	"Announce"
 	{
 		"#format"	"{1:s},{2:s},{3:s}"
 		"en"		"{2}{1}{3} connected!"
 		"de"		"{2}{1}{3} verbunden!"
+	}
+	"RoundSummaryPointsGained"
+	{
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
+		"en"		"{1}Round summary:{2} {5}{3}{6} points earned! ({7}{4}{8} points total)"
+		"de"		"{1}Rundenwertung:{2} {5}{3}{6} Punkte verbessert! ({7}{4}{8} Punkte)"
+	}
+	"RoundSummaryPointsLost"
+	{
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
+		"en"		"{1}Round summary:{2} {5}{3}{6} points lost! ({4} points total)"
+		"de"		"{1}Rundenwertung:{2} {5}{3}{6} Punkte verloren! ({4} Punkte)"
+	}
+	"RoundSummaryRankedUp"
+	{
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
+		"en"		"{1}Round summary:{2} You climbed up {5}{3}{6} ranks - you are rank {7}{4}{8} now!"
+		"de"		"{1}Rundenwertung:{2} Ranglistenplatz {7}{4}{8} (Verbesserung um {5}{3}{6} Plätze!)"
+	}
+	"RoundSummaryRankedDown"
+	{
+		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
+		"en"		"{1}Round summary:{2} You fell down {5}{3}{6} ranks - you are rank {7}{4}{8} now!"
+		"de"		"{1}Rundenwertung:{2} Ranglistenplatz {7}{4}{8} (Verschlechterung um {5}{3}{6} Plätze!)"
+	}
+	"RoundSummaryRankKept"
+	{
+		"#format"	"{1:s},{2:s},{3:i},{4:s},{5:s}"
+		"en"		"{1}Round summary:{2} You kept rank {4}{3}{5}."
+		"de"		"{1}Rundenwertung:{2} Ranglistenplatz {4}{3}{5} verteidigt."
 	}
 	"ConfigReloaded"
 	{

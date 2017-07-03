@@ -34,7 +34,6 @@
 */
 
 /**
- * TODO: Play "\sound\player\voice\brag_bestinwest.wav" when #1 connects/enters (or "\sound\player\voice\howl_yeehaw2.wav" or "\sound\monastery\bell.wav")
  * TODO: implement killstreak top 10
  */
 
@@ -56,7 +55,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"0.9.8"
+#define PLUGIN_VERSION 		"0.9.9"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -64,6 +63,8 @@
 #define CONFIG_FILENAME 	"fof_rank.cfg"
 #define TRANSLATIONS_FILENAME "fof_rank.phrases"
 #define CHAT_COLORTAG1 		"\x0794D8E9"
+#define CHAT_COLORTAG_RED	"\x07DB4646"
+#define CHAT_COLORTAG_GOLD	"\x07D4B51A"
 #define CHAT_COLORTAG_NORM 	"\x01"
 #define CHAT_COLORTAG_TEAM 	"\x03"
 
@@ -118,11 +119,12 @@ new Handle:g_CvarAnnouncePlayers = INVALID_HANDLE;
 new Handle:g_CvarShowPanels = INVALID_HANDLE;
 new Handle:g_CvarInformPoints = INVALID_HANDLE;
 new Handle:g_CvarRoundSummary = INVALID_HANDLE;
+
 new Handle:g_CvarFofCurrentMode = INVALID_HANDLE;
 new Handle:g_CvarFofWarmupTime = INVALID_HANDLE;
 
 // global dynamic arrays
-new Handle:g_WeaponDetails = INVALID_HANDLE;		// list of arrays holding the points per weapon
+new Handle:g_WeaponDetails = INVALID_HANDLE;	// list of arrays holding the points per weapon
 
 // global static arrays
 new g_PlayerMaxKillstreak[MAXPLAYERS + 1];		// array for storing max killstreak of players (easier to handle than always requesting from db)
@@ -131,8 +133,11 @@ new g_PlayerPreviousLogin[MAXPLAYERS + 1];		// needed for welcome panel on spawn
 new g_PlayerSpawnedAt[MAXPLAYERS + 1];			// array for keeping track of the time alive of a player
 new g_CurrentMenuState[MAXPLAYERS + 1][2];		// for storing the state of the ranking list menu when a ranking panel is displayed as a sub menu
 new g_CurrentStatsPlayerId[MAXPLAYERS + 1];		// for storing the id of the player whose statistics are currently shown on a panel
-new g_PlayerDbId[MAXPLAYERS + 1];
+new g_PlayerDbId[MAXPLAYERS + 1];				// stores the id in table Players for each client
 new bool:g_PlayerSilentInit[MAXPLAYERS + 1];	// array to determine if player data should be loaded silently during plugin startup
+new g_PlayerPointsAtRoundstart[MAXPLAYERS + 1];	// stores each clients points when the round started
+new g_PlayerRankAtRoundstart[MAXPLAYERS + 1];	// stores each clients rank when the round started
+new g_PlayerPoints[MAXPLAYERS + 1];				// stores each clients current points
 
 // other global vars
 new String:g_LastError[255];					// needed for config file parsing and logging: holds the last error message
@@ -264,6 +269,9 @@ public void OnClientPostAdminCheck(client) {
 		g_PlayerKillstreak[client] = 0;		// should already be 0, but who knows...
 		g_PlayerMaxKillstreak[client] = 0;
 		g_PlayerPreviousLogin[client] = 0;
+		g_PlayerPointsAtRoundstart[client] = 0;
+		g_PlayerPoints[client] = 0;
+		g_PlayerRankAtRoundstart[client] = 0;
 		if (g_db != INVALID_HANDLE) {
 			// Add player entry to db
 			decl String:playerName[MAX_NAME_LENGTH];
@@ -359,6 +367,12 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 			decl String:Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_UPDATE_LASTENTER, GetTime(), g_PlayerDbId[client], g_ServerID);
 			SQL_TQuery(g_db, SQL_RefreshActivePlayers, Sql, data);
+			// Store player's rank and points in array
+			new rank = SQL_FetchInt(hndl, 2);
+			new points = SQL_FetchInt(hndl, 0);
+			g_PlayerRankAtRoundstart[client] = rank;
+			g_PlayerPointsAtRoundstart[client] = points;
+			g_PlayerPoints[client] = points;
 #if defined DEBUG
 			PrintToServer("%s+++++ Announcing client %d , silentInit: %d, PlayerPreviousLogin: %d +++++", PLUGIN_LOGPREFIX, client, g_PlayerSilentInit[client], g_PlayerPreviousLogin[client]); // DEBUG
 #endif
@@ -372,7 +386,6 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 				GeoipCountry(playerIp, playerCountry, sizeof(playerCountry));
 				decl String:playerName[MAX_NAME_LENGTH];
 				GetClientName(client, playerName, sizeof(playerName));
-				new rank = SQL_FetchInt(hndl, 2);
 				if (strlen(playerCountry) > 0) {
 					// announce player with country
 					if (g_PlayerPreviousLogin[client] > 0) {
@@ -380,13 +393,13 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 						if (rank == 1) {
 							// wow - No 1 is coming!
 							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankAndCountryNo1", 
-								playerName, playerCountry, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
-								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG1);
+								playerName, playerCountry, rank, SQL_FetchInt(hndl, 3), points, 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG1, CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
 						} else {
 							// just a regular player...
 							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankAndCountry", 
-								playerName, playerCountry, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
-								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+								playerName, playerCountry, rank, SQL_FetchInt(hndl, 3), points, 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
 						}
 					} else {
 						// player is here for the first time - just tell the name
@@ -400,13 +413,13 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 						if (rank == 1) {
 							// wow - No 1 is coming!
 							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRankNo1", 
-								playerName, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
-								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG1);
+								playerName, rank, SQL_FetchInt(hndl, 3), points, 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG1, CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
 						} else {
 							// just a regular player...
 							PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "AnnounceWithRank", 
-								playerName, rank, SQL_FetchInt(hndl, 3), SQL_FetchInt(hndl, 0), 
-								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+								playerName, rank, SQL_FetchInt(hndl, 3), points, 
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM, CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
 						}
 					} else {
 						// player is here for the first time - just tell the name
@@ -511,9 +524,10 @@ public Action:Timer_InitExplanationPanel(Handle:timer, any:client) {
 }
 
 /**
- * Event Handler for RoundEnd (store the times alive in database)
+ * Event Handler for RoundEnd (store the times alive in database and show round summary)
  */
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
+	// store times alive in db
 	for (new i = 0; i <= MaxClients; i++) {
 		if (!IsFakeClient(i) && g_Enabled) {
 			if (g_PlayerDbId[i] > 0 && g_PlayerSpawnedAt[i] > 0) {
@@ -523,6 +537,22 @@ public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
 			}
 			g_PlayerSpawnedAt[i] = 0;
 		}
+	}
+	// initiate round summaries
+	if (g_RoundSummary) {
+		// transform players ids to a string
+		decl String:playerIds[MAXPLAYERS * 12];
+		IntToString(-1, playerIds, sizeof(playerIds));
+		decl offset;
+		for (new i = 1; i < MaxClients; i++)
+			if (IsClientConnected(i) && !IsFakeClient(i) && g_PlayerDbId[i] > 0) {
+				offset = strlen(playerIds);
+				Format(playerIds[offset], sizeof(playerIds) - offset - 12, ",%d", g_PlayerDbId[i]);
+			}
+		// collect current players ranks
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_SELECT_RANKS, GetTime() - g_MaxIdleSecs, playerIds);
+		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
 	}
 }
 
@@ -563,20 +593,21 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 			}
 			new timeAlive = RoundToZero(GetClientTime(victimId)) - g_PlayerSpawnedAt[victimId];
 			g_PlayerSpawnedAt[victimId] = 0;
+			g_PlayerPoints[victimId] += penaltyPoints;
 			Format(Sql, sizeof(Sql), SQL_UPDATE_DEATHS_POINTS, ungraceful, penaltyPoints, timeAlive, g_PlayerDbId[victimId], g_ServerID);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			// tell victim about his/her misery (in case there are points to loose)
 			if (penaltyPoints != 0 && g_InformAboutPoints)
 				if (ungraceful > 0)
 					if (penaltyPoints != 1)
-						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessage", -penaltyPoints);
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_RED, "UngracefulDeathMessage", -penaltyPoints);
 					else
-						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "UngracefulDeathMessageSingular");
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_RED, "UngracefulDeathMessageSingular");
 				else {
 					if (penaltyPoints != 1)
-						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessage", -penaltyPoints);
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_RED, "DeathMessage", -penaltyPoints);
 					else
-						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_TEAM, "DeathMessageSingular");
+						PrintToChat(victimId, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_RED, "DeathMessageSingular");
 				}
 		}
 		if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId) {
@@ -591,6 +622,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 				g_ServerID, g_PlayerDbId[attackerId], weaponIdx,
 				g_ServerID, g_PlayerDbId[attackerId], weaponIdx, headshotInc, headshotInc);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
+			g_PlayerPoints[attackerId] += rankPoints;
 			Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, rankPoints, g_PlayerDbId[attackerId], g_ServerID);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			// increase attacker's killstreak
@@ -619,6 +651,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		}
 		if (g_PlayerDbId[assistId] > 0 && g_PointsPerAssist != 0) {
 			// credit points to assisting player
+			g_PlayerPoints[assistId] += g_PointsPerAssist;
 			Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, g_PointsPerAssist, g_PlayerDbId[assistId], g_ServerID);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			// increase kill assists counter
@@ -924,9 +957,6 @@ public void OnMapStart() {
 		new warmupSecs = GetConVarInt(g_CvarFofWarmupTime);
 		if ((mode == 1 || mode == 2) && warmupSecs > 0) {
 			// we have to start a warmup timer!
-#if defined DEBUG
-			PrintToServer("%sWe have a warmup time! (%d seconds)", PLUGIN_LOGPREFIX, warmupSecs);
-#endif
 			g_Warmup = true;
 			CreateTimer(float(warmupSecs), Timer_WarmupEnded);
 		} else
@@ -948,6 +978,66 @@ public Action:Timer_WarmupEnded(Handle:timer, any:data) {
 #endif
 	return Plugin_Stop;
 }
+
+/**
+ * Callback after executing SQL / got players rank, now present the round summary
+ */
+public void SQL_TellRoundSummary(Handle:owner, Handle:hndl, const String:error[], any:data)
+{
+	if (hndl != INVALID_HANDLE && strlen(error) == 0) {
+		decl i;
+		decl playerId;
+		decl rank;
+		while (SQL_FetchRow(hndl)) {
+			playerId = SQL_FetchInt(hndl, 0);
+			rank = SQL_FetchInt(hndl, 1);
+			for (i = 1; i < sizeof(g_PlayerRankAtRoundstart); i++) {
+				if (g_PlayerDbId[i] == playerId && IsClientConnected(i) && !IsFakeClient(i)) {
+					// display summary to player
+					if (g_PlayerPointsAtRoundstart[i] > g_PlayerPoints[i]) {
+						// player has lost points
+						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryPointsLost", 
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
+								g_PlayerPointsAtRoundstart[i] - g_PlayerPoints[i], g_PlayerPoints[i],
+								CHAT_COLORTAG_RED, CHAT_COLORTAG_NORM,
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
+					} else {
+						// player has earned points (or at least did not loose them)
+						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryPointsGained", 
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
+								g_PlayerPoints[i] - g_PlayerPointsAtRoundstart[i], g_PlayerPoints[i],
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM,
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
+					}
+					if (g_PlayerRankAtRoundstart[i] > rank) {
+						// player has dismounted
+						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryRankedDown", 
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
+								g_PlayerRankAtRoundstart[i] - rank, rank,
+								CHAT_COLORTAG_RED, CHAT_COLORTAG_NORM,
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+					} else if (g_PlayerRankAtRoundstart[i] < rank) {
+						// player has climbed up
+						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryRankedUp", 
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
+								rank - g_PlayerRankAtRoundstart[i], rank,
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM,
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+					} else {
+						// player stayed where he/she was
+						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryRankKept", 
+								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
+								rank,
+								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
+					}
+					break;
+				}
+			}
+		}
+	} else if (strlen(error) > 0)
+		LogError("SQL error occured: %s", error);
+}
+
 
 
 /**
@@ -1043,6 +1133,15 @@ public Action:PlayerCommandHandler(client, args) {
  *
  */
 public Action:RankCommandHandler(client, args) {
+	if (IsClientConnected(client) && !IsFakeClient(client)) {
+		// show round summary
+		decl String:playerIds[12];
+		IntToString(g_PlayerDbId[client], playerIds, sizeof(playerIds));
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_SELECT_RANKS, GetTime() - g_MaxIdleSecs, playerIds);
+		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
+	}
+	// initiate rank panel
 	return InitRankCommand(client, args);
 }
 
@@ -1193,7 +1292,7 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 			panel.DrawItem("", ITEMDRAW_NOTEXT);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, RankingPanelHandler, 60);
+		panel.Send(client, RankingPanelHandler, 30);
 		delete panel;
 	}
 }
@@ -1359,7 +1458,7 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, EmptyPanelHandler, 60);
+		panel.Send(client, EmptyPanelHandler, 45);
 		delete panel;
 	}
 }
@@ -1392,7 +1491,6 @@ public Action:DebugCommandHandler(client, args) {
 	PrintToChat(client, "%sWarmup: %d, AnnouncePlayer: %d, ShowPanels: %d, InformPoints: %d, Enabled: %d",
 		PLUGIN_LOGPREFIX, g_Warmup, g_AnnouncePlayers, g_ShowPanels, g_InformAboutPoints, g_Enabled);
 	PrintToChat(client, "\x01\\x01 \x02\\x02 \x03\\x03 \x04\\x04 \x05\\x05 \x06\\x06");
-	
 	return Plugin_Handled;
 }
 #endif
@@ -1457,6 +1555,9 @@ void ResetPlayer(const client) {
 			g_PlayerDbId[i] = -1;
 			g_PlayerPreviousLogin[i] = -1;
 			g_PlayerSilentInit[i] = false;
+			g_PlayerPointsAtRoundstart[i] = 0;
+			g_PlayerPoints[i] = 0;
+			g_PlayerRankAtRoundstart[i] = 0;
 		}
 	} else if (client >= 0 && client < sizeof(g_PlayerKillstreak)) {
 		g_PlayerKillstreak[client] = 0;
@@ -1465,6 +1566,9 @@ void ResetPlayer(const client) {
 		g_PlayerDbId[client] = -1;
 		g_PlayerPreviousLogin[client] = -1;
 		g_PlayerSilentInit[client] = false;
+		g_PlayerPointsAtRoundstart[client] = 0;
+		g_PlayerPoints[client] = 0;
+		g_PlayerRankAtRoundstart[client] = 0;
 	}
 }
 

@@ -171,6 +171,11 @@
 	ORDER BY SUM(Kills) DESC, k.VictimID \
 	LIMIT %d;"
 
+#define SQL_SELECT_RANKS "SELECT s1.PlayerID, \
+	(SELECT COUNT(PlayerID) FROM (SELECT PlayerID FROM PlayerStats WHERE Lastenter > %d AND Spawns > 0 \
+		GROUP BY PlayerID HAVING SUM(Points) > (SELECT SUM(Points) FROM PlayerStats WHERE PlayerID = s1.PlayerID))) \
+	FROM PlayerStats AS s1 WHERE PlayerID IN (%s);"
+	
 #define SQL_SCHEMA_VERSION_3_1 "ALTER TABLE \"KillLog\" RENAME TO \"_KillLog_old_20170628\";"
 
 #define SQL_SCHEMA_VERSION_3_2 "DROP INDEX \"IDX_KillLog_Victim\";"
