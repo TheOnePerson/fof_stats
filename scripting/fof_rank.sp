@@ -55,7 +55,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"0.9.9"
+#define PLUGIN_VERSION 		"1.0.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -153,6 +153,7 @@ new bool:g_AnnouncePlayers = true;
 new bool:g_ShowPanels = true;
 new bool:g_InformAboutPoints = true;
 new bool:g_RoundSummary = true;
+new bool:g_RoundTimer = false;
 new g_MaxIdleSecs = DEFAULT_IDLESECS;
 new g_ActivePlayers = 0;
 new g_DefaultPointsPerKill = 3;
@@ -463,6 +464,20 @@ public OnClientDisconnect(client) {
  * Event Handler for PlayerSpawn (store the ClientTime and spawns to be able to determine average time alive)
  */
 public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+	// check if a round summary timer should be set
+	if (g_RoundSummary && !g_RoundTimer) {
+		decl timeleft;
+		GetMapTimeLeft(timeleft);
+		if (g_CvarFofWarmupTime != INVALID_HANDLE)
+			timeleft += GetConVarInt(g_CvarFofWarmupTime);
+#if defined DEBUG
+		PrintToServer("%s>>>> First Player spawned. Timeleft = %d", PLUGIN_LOGPREFIX, timeleft);
+#endif
+		CreateTimer(float(timeleft - 9), Timer_RoundSummary, INVALID_HANDLE, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+		g_RoundTimer = true;
+
+	}
+	// now handle client related stuff
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	if (!IsFakeClient(client) && g_Enabled) {
 		new playtime = RoundToZero(GetClientTime(client));
@@ -537,22 +552,6 @@ public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
 			}
 			g_PlayerSpawnedAt[i] = 0;
 		}
-	}
-	// initiate round summaries
-	if (g_RoundSummary) {
-		// transform players ids to a string
-		decl String:playerIds[MAXPLAYERS * 12];
-		IntToString(-1, playerIds, sizeof(playerIds));
-		decl offset;
-		for (new i = 1; i < MaxClients; i++)
-			if (IsClientConnected(i) && !IsFakeClient(i) && g_PlayerDbId[i] > 0) {
-				offset = strlen(playerIds);
-				Format(playerIds[offset], sizeof(playerIds) - offset - 12, ",%d", g_PlayerDbId[i]);
-			}
-		// collect current players ranks
-		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_RANKS, GetTime() - g_MaxIdleSecs, playerIds);
-		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
 	}
 }
 
@@ -667,8 +666,8 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		}
 		if (g_PlayerDbId[attackerId] > 0 && g_PlayerDbId[victimId] > 0) {
 			// write kill log
-			Format(Sql, sizeof(Sql), SQL_INSERT_KILLLOG, g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], weaponIdx, 
-				g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], weaponIdx);
+			Format(Sql, sizeof(Sql), SQL_INSERT_KILLLOG, g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], 
+				g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId]);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 	}
@@ -963,6 +962,8 @@ public void OnMapStart() {
 			g_Warmup = false;
 	} else
 		g_Warmup = false;
+	// reset flag for round summary timer
+	g_RoundTimer = false;
 }
 
 /**
@@ -978,6 +979,38 @@ public Action:Timer_WarmupEnded(Handle:timer, any:data) {
 #endif
 	return Plugin_Stop;
 }
+
+/**
+ * Handler for the timer present a round summary 
+ * 
+ * @param timer 		handle for the timer
+ */
+public Action:Timer_RoundSummary(Handle:timer, any:data) {
+	
+	decl timeleft;
+	GetMapTimeLeft(timeleft);
+#if defined DEBUG
+	PrintToServer(">>>>> Round summary starting! Time left: %d", timeleft);
+#endif
+	if (g_RoundSummary) {
+		// initiate round summaries - transform players ids to a string
+		decl String:playerIds[MAXPLAYERS * 12];
+		IntToString(-1, playerIds, sizeof(playerIds));
+		decl offset;
+		for (new i = 1; i < MaxClients; i++)
+			if (IsClientConnected(i) && !IsFakeClient(i) && g_PlayerDbId[i] > 0) {
+				offset = strlen(playerIds);
+				Format(playerIds[offset], sizeof(playerIds) - offset - 12, ",%d", g_PlayerDbId[i]);
+			}
+		// collect current players ranks
+		decl String:Sql[SQL_MAX_LENGTH];
+		Format(Sql, sizeof(Sql), SQL_SELECT_RANKS, GetTime() - g_MaxIdleSecs, playerIds);
+		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
+		return Plugin_Stop;
+	} else
+		return Plugin_Continue;
+}
+
 
 /**
  * Callback after executing SQL / got players rank, now present the round summary
@@ -1009,18 +1042,18 @@ public void SQL_TellRoundSummary(Handle:owner, Handle:hndl, const String:error[]
 								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM,
 								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM);
 					}
-					if (g_PlayerRankAtRoundstart[i] > rank) {
+					if (g_PlayerRankAtRoundstart[i] < rank) {
 						// player has dismounted
 						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryRankedDown", 
 								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
-								g_PlayerRankAtRoundstart[i] - rank, rank,
+								rank - g_PlayerRankAtRoundstart[i], rank,
 								CHAT_COLORTAG_RED, CHAT_COLORTAG_NORM,
 								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
-					} else if (g_PlayerRankAtRoundstart[i] < rank) {
+					} else if (g_PlayerRankAtRoundstart[i] > rank) {
 						// player has climbed up
 						PrintToChat(i, "%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, "RoundSummaryRankedUp", 
 								CHAT_COLORTAG_GOLD, CHAT_COLORTAG_NORM, 
-								rank - g_PlayerRankAtRoundstart[i], rank,
+								g_PlayerRankAtRoundstart[i] - rank, rank,
 								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM,
 								CHAT_COLORTAG_TEAM, CHAT_COLORTAG_NORM);
 					} else {
@@ -1663,12 +1696,20 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_4);
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_5);
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_6);
+		}
+		if (version < 4) {
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_1);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_2);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_4_3);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_4_4);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_5);
+			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_6);
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_CLEANUP);
 		}
 		SQL_UnlockDatabase(g_db);
 		// Save latest schema version
 		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 3);
+		Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 4);
 		SQL_FastQuery(g_db, Sql);
 	}
 }

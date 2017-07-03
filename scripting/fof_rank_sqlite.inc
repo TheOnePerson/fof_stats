@@ -130,9 +130,9 @@
 	COALESCE((SELECT Headshots FROM WeaponStats WHERE ServerID = %d and PlayerID = %d and WeaponIdx = %d) + %d, %d) \
 	);"
 
-#define SQL_INSERT_KILLLOG "INSERT OR REPLACE INTO KillLog(ServerID, KillerID, VictimID, WeaponIdx, Kills) \
-	VALUES (%d, %d, %d, %d, \
-	COALESCE((SELECT Kills FROM KillLog WHERE ServerID = %d and KillerID = %d and VictimID = %d and WeaponIdx = %d) + 1, 1));"
+#define SQL_INSERT_KILLLOG "INSERT OR REPLACE INTO KillLog(ServerID, KillerID, VictimID, Kills) \
+	VALUES (%d, %d, %d, \
+	COALESCE((SELECT Kills FROM KillLog WHERE ServerID = %d and KillerID = %d and VictimID = %d) + 1, 1));"
 
 #define SQL_SELECT_TOP10 "SELECT Name, p.ID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
 	 WHERE s.Lastenter > %d AND s.Spawns > 0 GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(TimeAlive) DESC, SUM(Logins) LIMIT %d, %d;"
@@ -176,7 +176,7 @@
 		GROUP BY PlayerID HAVING SUM(Points) > (SELECT SUM(Points) FROM PlayerStats WHERE PlayerID = s1.PlayerID))) \
 	FROM PlayerStats AS s1 WHERE PlayerID IN (%s);"
 	
-#define SQL_SCHEMA_VERSION_3_1 "ALTER TABLE \"KillLog\" RENAME TO \"_KillLog_old_20170628\";"
+#define SQL_SCHEMA_VERSION_3_1 "ALTER TABLE \"KillLog\" RENAME TO \"_KillLog_old_temp\";"
 
 #define SQL_SCHEMA_VERSION_3_2 "DROP INDEX \"IDX_KillLog_Victim\";"
 
@@ -190,13 +190,26 @@
 
 #define SQL_SCHEMA_VERSION_3_4 "INSERT INTO \"KillLog\" (\"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\", \"Kills\") \
 	SELECT \"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\", COUNT(*) \
-	FROM \"_KillLog_old_20170628\" \
+	FROM \"_KillLog_old_temp\" \
 	GROUP BY \"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\" \
 	ORDER BY \"ServerID\", \"KillerID\", \"VictimID\", \"WeaponIdx\";"
 
 #define SQL_SCHEMA_VERSION_3_5 "CREATE INDEX \"IDX_KillLog_Victim\" ON \"KillLog\" (\"VictimID\" ASC, \"KillerID\" ASC);"
 
-#define SQL_SCHEMA_VERSION_3_6 "DROP TABLE \"_KillLog_old_20170628\";"
+#define SQL_SCHEMA_VERSION_3_6 "DROP TABLE \"_KillLog_old_temp\";"
+
+#define SQL_SCHEMA_VERSION_4_3 "CREATE TABLE IF NOT EXISTS \"KillLog\" ( \
+	\"ServerID\"  INTEGER NOT NULL, \
+	\"KillerID\"  INTEGER NOT NULL, \
+	\"VictimID\"  INTEGER NOT NULL, \
+	\"Kills\"  INTEGER NOT NULL DEFAULT 0, \
+	PRIMARY KEY (\"KillerID\" ASC, \"ServerID\" ASC, \"VictimID\"));"
+
+#define SQL_SCHEMA_VERSION_4_4 "INSERT INTO \"KillLog\" (\"ServerID\", \"KillerID\", \"VictimID\", \"Kills\") \
+	SELECT \"ServerID\", \"KillerID\", \"VictimID\", SUM(\"Kills\") \
+	FROM \"_KillLog_old_temp\" \
+	GROUP BY \"ServerID\", \"KillerID\", \"VictimID\" \
+	ORDER BY \"KillerID\", \"ServerID\", \"VictimID\";"
 
 #define SQL_SCHEMA_VERSION_CLEANUP "VACUUM;"
 
