@@ -68,7 +68,7 @@
 #define CHAT_COLORTAG_NORM 	"\x01"
 #define CHAT_COLORTAG_TEAM 	"\x03"
 
-#define PLUGIN_LOGPREFIX 	"[FoF Ranking] "
+#define PLUGIN_LOGPREFIX 	"[Ranking] "
 
 #define MAX_WEAPONS 60
 #define MAX_PANELLINE_LENGTH 80

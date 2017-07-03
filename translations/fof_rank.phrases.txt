@@ -7,7 +7,7 @@
 	}
 	"ChatPrefix"
 	{
-		"en"		"[SM] [FoF Ranking] "
+		"en"		"[SM] [Ranking] "
 	}
 	"CommandReplyTop10"
 	{
