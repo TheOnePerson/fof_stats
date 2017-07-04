@@ -1710,7 +1710,8 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 			decl String:Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 4);
 			SQL_FastQuery(g_db, Sql);
-		}
+		} else
+			SQL_UnlockDatabase(g_db);
 	}
 }
 
