@@ -1705,12 +1705,12 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_5);
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_6);
 			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_CLEANUP);
+			SQL_UnlockDatabase(g_db);
+			// Save latest schema version
+			decl String:Sql[SQL_MAX_LENGTH];
+			Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 4);
+			SQL_FastQuery(g_db, Sql);
 		}
-		SQL_UnlockDatabase(g_db);
-		// Save latest schema version
-		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 4);
-		SQL_FastQuery(g_db, Sql);
 	}
 }
 
