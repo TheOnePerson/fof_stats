@@ -11,6 +11,11 @@
 #define SQL_DBDRIVERNAME "sqlite"
 #define SQL_MAX_LENGTH 8192
 
+stock void DB_SetConnectionKV(Handle:kv) {
+	KvSetString(kv, "driver", SQL_DBDRIVERNAME);
+	KvSetString(kv, "database", SQL_DEFAULTDBNAME);
+}
+
 #define SQL_CREATE_TBL_Players "CREATE TABLE IF NOT EXISTS \"Players\" (  \
 	\"ID\"  INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,  \
 	\"Name\"  TEXT NOT NULL DEFAULT '',  \
@@ -75,6 +80,10 @@
 #define SQL_INSERT_PLAYER "INSERT OR REPLACE INTO Players(ID, Name, SteamID, IP) \
 	VALUES ((SELECT ID FROM Players WHERE SteamID = '%s'), '%s', '%s', '%s');"
 
+stock void DB_Format_SQL_INSERT_PLAYER(String:Sql[], int maxlen, const String:steamID[], const String:playerNameEsc[], const String:playerIp[]) {
+	Format(Sql, maxlen, SQL_INSERT_PLAYER, steamID, playerNameEsc, steamID, playerIp);
+}
+
 #define SQL_SELECT_PLAYERID "SELECT ID FROM Players WHERE SteamID = '%s' LIMIT 1;"
 
 #define SQL_INSERT_PLAYERSTAT "INSERT OR REPLACE INTO PlayerStats(PlayerID, ServerID, Logins, Points, Spawns, Deaths, UngracefulDeaths, Killstreak, KillAssists, TimeAlive, Firstenter, Lastenter) \
@@ -90,12 +99,26 @@
 	(SELECT Lastenter FROM PlayerStats WHERE PlayerID = %d and ServerID = %d) \
 	);"
 
+stock void DB_Format_SQL_INSERT_PLAYERSTAT(String:Sql[], int maxlen, const int playerID, const int serverID, const int loginInc) {
+	Format(Sql, maxlen, SQL_INSERT_PLAYERSTAT, playerID, serverID,
+		playerID, serverID, loginInc,
+		playerID, serverID,
+		playerID, serverID,
+		playerID, serverID,
+		playerID, serverID,
+		playerID, serverID,
+		playerID, serverID,
+		playerID, serverID,
+		playerID, serverID, GetTime(), 
+		playerID, serverID);
+}
+			
 #define SQL_SELECT_MAXKILLSTREAK "SELECT MAX(Killstreak) FROM PlayerStats WHERE PlayerID = %i;"
 
 #define SQL_SELECT_DATAONCONNECT "SELECT SUM(Points), MAX(CASE ServerID WHEN %d THEN Lastenter ELSE 0 END), \
 	(SELECT COUNT(PlayerID) FROM (SELECT PlayerID FROM PlayerStats WHERE Lastenter > %d AND Spawns > 0 \
 		GROUP BY PlayerID HAVING SUM(Points) > (SELECT SUM(Points) FROM PlayerStats WHERE PlayerID = %i))), \
-	(SELECT COUNT(*) FROM Players WHERE Lastenter > %d AND Spawns > 0) \
+	(SELECT COUNT(*) FROM PlayerStats WHERE Lastenter > %d AND Spawns > 0) \
 	FROM PlayerStats WHERE PlayerID = %i;"
 
 #define SQL_UPDATE_LASTENTER "UPDATE PlayerStats SET Lastenter = %d WHERE PlayerID = %d and ServerID = %d;"
@@ -130,9 +153,19 @@
 	COALESCE((SELECT Headshots FROM WeaponStats WHERE ServerID = %d and PlayerID = %d and WeaponIdx = %d) + %d, %d) \
 	);"
 
+stock void DB_Format_SQL_INSERT_WEAPONSTAT_KILLS(String:Sql[], int maxlen, const int playerID, const int serverID, const int weaponIdx, const int headshotInc) {
+	Format(Sql, maxlen, SQL_INSERT_WEAPONSTAT_KILLS, serverID, playerID, weaponIdx, 
+		serverID, playerID, weaponIdx,
+		serverID, playerID, weaponIdx, headshotInc, headshotInc);
+}
+
 #define SQL_INSERT_KILLLOG "INSERT OR REPLACE INTO KillLog(ServerID, KillerID, VictimID, Kills) \
 	VALUES (%d, %d, %d, \
 	COALESCE((SELECT Kills FROM KillLog WHERE ServerID = %d and KillerID = %d and VictimID = %d) + 1, 1));"
+
+stock void DB_Format_SQL_INSERT_KILLLOG(String:Sql[], int maxlen, const int playerID, const int serverID, const int victimID) {
+	Format(Sql, maxlen, SQL_INSERT_KILLLOG, serverID, playerID, victimID, serverID, playerID, victimID);
+}
 
 #define SQL_SELECT_TOP10 "SELECT Name, p.ID, SUM(Points) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
 	 WHERE s.Lastenter > %d AND s.Spawns > 0 GROUP BY p.ID ORDER BY SUM(Points) DESC, SUM(TimeAlive) DESC, SUM(Logins) LIMIT %d, %d;"

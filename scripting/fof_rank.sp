@@ -38,9 +38,10 @@
  */
 
 /*
-	As a preparation for a later version, in which there may be a mysql version:
+	Uncomment the database engine you want to use:
 */
 #define ENGINE_SQLITE
+//#define ENGINE_MYSQL
 
 
 // Uncomment the line below to get a whole bunch of PrintToServer debug messages...
@@ -55,7 +56,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"1.0.0"
+#define PLUGIN_VERSION 		"1.1.1m"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -73,7 +74,6 @@
 #define MAX_WEAPONS 60
 #define MAX_PANELLINE_LENGTH 80
 #define STEAMID_LENGTH 25
-#define DEFAULT_TP_WARMUPTIME 10
 #define DEFAULT_IDLESECS 30 * 24 * 60 * 60
 #define KILLER_LIST_ITEMS 10
 
@@ -91,6 +91,8 @@
 
 #if defined ENGINE_SQLITE
 	#include <fof_rank_sqlite.inc>	// SQLite specific declarations
+#else
+	#include <fof_rank_mysql.inc>	// MySQL specific declarations
 #endif
 
 // Plugin definitions
@@ -284,7 +286,8 @@ public void OnClientPostAdminCheck(client) {
 			GetClientIP(client, playerIp, sizeof(playerIp), true);
 			SQL_EscapeString(g_db, playerName, playerNameEsc, sizeof(playerNameEsc));
 			decl String:Sql[SQL_MAX_LENGTH];
-			Format(Sql, sizeof(Sql), SQL_INSERT_PLAYER, steamID, playerNameEsc, steamID, playerIp);
+			// Format(Sql, sizeof(Sql), SQL_INSERT_PLAYER, steamID, playerNameEsc, steamID, playerIp);
+			DB_Format_SQL_INSERT_PLAYER(Sql, sizeof(Sql), steamID, playerNameEsc, playerIp);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			// Get player's db ID (to store it in array)
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERID, steamID);
@@ -311,17 +314,7 @@ public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], 
 				loginInc = 0;
 			else
 				loginInc = 1;
-			Format(Sql, sizeof(Sql), SQL_INSERT_PLAYERSTAT, g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID, loginInc,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID,
-				g_PlayerDbId[client], g_ServerID, GetTime(), 
-				g_PlayerDbId[client], g_ServerID);
+			DB_Format_SQL_INSERT_PLAYERSTAT(Sql, sizeof(Sql), g_PlayerDbId[client], g_ServerID, loginInc);
 			SQL_TQuery(g_db, SQL_UpdatePlayerStats, Sql, data);
 		}
 }
@@ -471,7 +464,7 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 		if (g_CvarFofWarmupTime != INVALID_HANDLE)
 			timeleft += GetConVarInt(g_CvarFofWarmupTime);
 #if defined DEBUG
-		PrintToServer("%s>>>> First Player spawned. Timeleft = %d", PLUGIN_LOGPREFIX, timeleft);
+		// PrintToServer("%s>>>> First Player spawned. Timeleft = %d", PLUGIN_LOGPREFIX, timeleft);
 #endif
 		CreateTimer(float(timeleft - 9), Timer_RoundSummary, INVALID_HANDLE, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 		g_RoundTimer = true;
@@ -487,7 +480,7 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 		SQL_TQuery(g_db, SQL_LogError, Sql);
 		
 #if defined DEBUG
-		PrintToServer("%s+++++ Event_PlayerSpawn +++++ / Current Time: %d, Last Login: %d, Delta: %d", PLUGIN_LOGPREFIX, GetTime(), g_PlayerPreviousLogin[client], GetTime() - g_PlayerPreviousLogin[client]); // DEBUG
+		// PrintToServer("%s+++++ Event_PlayerSpawn +++++ / Current Time: %d, Last Login: %d, Delta: %d", PLUGIN_LOGPREFIX, GetTime(), g_PlayerPreviousLogin[client], GetTime() - g_PlayerPreviousLogin[client]); // DEBUG
 		// Just for testing...
 		//decl String:playerName[MAX_NAME_LENGTH];
 		//GetClientName(client, playerName, sizeof(playerName));
@@ -572,7 +565,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		decl String:msg[255];
 		Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
 			victimId, attackerId, assistId, headshot, weaponIdx, weaponName);
-		//LogMessage(msg);
+		LogMessage(msg);
 #endif
 		
 		// reset victim's killstreak
@@ -617,12 +610,16 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 				headshotInc = 1;
 			else
 				headshotInc = 0;
-			Format(Sql, sizeof(Sql), SQL_INSERT_WEAPONSTAT_KILLS, g_ServerID, g_PlayerDbId[attackerId], weaponIdx, 
-				g_ServerID, g_PlayerDbId[attackerId], weaponIdx,
-				g_ServerID, g_PlayerDbId[attackerId], weaponIdx, headshotInc, headshotInc);
+			DB_Format_SQL_INSERT_WEAPONSTAT_KILLS(Sql, sizeof(Sql), g_PlayerDbId[attackerId], g_ServerID, weaponIdx, headshotInc);
+#if defined DEBUG
+			PrintToServer("%sSQL_INSERT_WEAPONSTAT_KILLS: %s", PLUGIN_LOGPREFIX, Sql);
+#endif
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			g_PlayerPoints[attackerId] += rankPoints;
 			Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS, rankPoints, g_PlayerDbId[attackerId], g_ServerID);
+#if defined DEBUG
+			PrintToServer("%sSQL_UPDATE_POINTS: %s", PLUGIN_LOGPREFIX, Sql);
+#endif
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			// increase attacker's killstreak
 			g_PlayerKillstreak[attackerId]++;
@@ -630,6 +627,9 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 				// new personal killstreak record: store it!
 				g_PlayerMaxKillstreak[attackerId] = g_PlayerKillstreak[attackerId];
 				Format(Sql, sizeof(Sql), SQL_UPDATE_KILLSTREAK, g_PlayerMaxKillstreak[attackerId], g_PlayerDbId[attackerId], g_ServerID);
+#if defined DEBUG
+				PrintToServer("%sSQL_UPDATE_KILLSTREAK: %s", PLUGIN_LOGPREFIX, Sql);
+#endif
 				SQL_TQuery(g_db, SQL_LogError, Sql);
 			}
 			// tell attacker about his/her fortune
@@ -666,8 +666,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		}
 		if (g_PlayerDbId[attackerId] > 0 && g_PlayerDbId[victimId] > 0) {
 			// write kill log
-			Format(Sql, sizeof(Sql), SQL_INSERT_KILLLOG, g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId], 
-				g_ServerID, g_PlayerDbId[attackerId], g_PlayerDbId[victimId]);
+			DB_Format_SQL_INSERT_KILLLOG(Sql, sizeof(Sql), g_PlayerDbId[attackerId], g_ServerID, g_PlayerDbId[victimId]);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 	}
@@ -759,7 +758,7 @@ public SQL_ShowRanklist(Handle:owner, Handle:hndl, const String:error[], any:dat
 			i++;
 		}
 		menu.ExitButton = true;
-		menu.DisplayAt(client, (g_CurrentMenuState[client][1] / 7) * 7, 60);
+		menu.DisplayAt(client, (g_CurrentMenuState[client][1] / 7) * 7, 30);
 		return;
 	}
 }
@@ -784,6 +783,9 @@ public RanklistMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 			g_CurrentMenuState[param1][1] = itemNo;
 			decl String:Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, itemNo + startFrom, playerId);
+#if defined DEBUG
+			PrintToServer("%sRanklistMenuHandler: %s", PLUGIN_LOGPREFIX, Sql);
+#endif
 			SQL_TQuery(g_db, SQL_InitRankingPanel, Sql, GetClientUserId(param1));
 		}
 	} else 
@@ -1220,7 +1222,7 @@ Action:InitRankCommand(client, args, databaseid = -1) {
 			showPlayerId = databaseid;
 		else
 			g_CurrentMenuState[client][0] = -1;
-		if (showPlayerId > 0) {
+		if (showPlayerId > 0 && IsClientConnected(client)) {
 			decl String:Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, showPlayerId, GetTime() - g_MaxIdleSecs, showPlayerId);
 			SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
@@ -1259,6 +1261,7 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
+		SQL_FetchRow(hndl);
 		decl String:playerName[MAX_NAME_LENGTH];
 		SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
 		new kills = SQL_FetchInt(hndl, 4);
@@ -1266,9 +1269,6 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 		g_CurrentStatsPlayerId[client] = SQL_FetchInt(hndl, 0);
 		new timeSinceSpawn = RoundToZero(GetClientTime(client)) - g_PlayerSpawnedAt[client];
 		new timeAlive = SQL_FetchInt(hndl, 10) + timeSinceSpawn;
-#if defined DEBUG
-		PrintToServer("%s*** SQL_InitRankingPanel *** TimeAlive=%d, CurrentMenuState=%d, g_PlayerSpawnedAt=%d, delta=%d", PLUGIN_LOGPREFIX, timeAlive, g_CurrentMenuState[client][0], g_PlayerSpawnedAt[client], timeSinceSpawn);
-#endif
 		new spawns = SQL_FetchInt(hndl, 11);
 		
 		decl String:panelLine[MAX_PANELLINE_LENGTH];
@@ -1344,6 +1344,10 @@ public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int par
 			if (param2 == 1) {
 				// show killer list
 				Format(Sql, sizeof(Sql), SQL_SELECT_KILLERS, g_CurrentStatsPlayerId[param1], GetTime() - g_MaxIdleSecs, KILLER_LIST_ITEMS);
+#if defined DEBUG
+				PrintToServer("%s*** RankingPanelHandler *** - SQL_SELECT_KILLERS: %s", PLUGIN_LOGPREFIX, Sql);
+#endif
+
 				SQL_TQuery(g_db, SQL_InitKillersPanel, Sql, GetClientUserId(param1));
 			} else if (param2 == 2) {
 				// show victim list
@@ -1392,7 +1396,7 @@ public void SQL_InitKillersPanel(Handle:owner, Handle:hndl, const String:error[]
 			panel.DrawItem("", ITEMDRAW_NOTEXT);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, RankingSubpanelHandler, 60);
+		panel.Send(client, RankingSubpanelHandler, 30);
 		delete panel;
 	}
 }
@@ -1429,7 +1433,7 @@ public void SQL_InitVictimsPanel(Handle:owner, Handle:hndl, const String:error[]
 			panel.DrawItem("", ITEMDRAW_NOTEXT);
 		Format(panelLine, sizeof(panelLine), "%T", "Back", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, RankingSubpanelHandler, 60);
+		panel.Send(client, RankingSubpanelHandler, 30);
 		delete panel;
 	}
 }
@@ -1491,7 +1495,7 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
 		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
 		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, EmptyPanelHandler, 45);
+		panel.Send(client, EmptyPanelHandler, 30);
 		delete panel;
 	}
 }
@@ -1619,8 +1623,7 @@ bool:SQL_OpenDB() {
 	else {
 		new Handle:kv;
 		kv = CreateKeyValues("");
-		KvSetString(kv, "driver", SQL_DBDRIVERNAME);
-		KvSetString(kv, "database", SQL_DEFAULTDBNAME);
+		DB_SetConnectionKV(kv);
 		g_db = SQL_ConnectCustom(kv, g_LastError, sizeof(g_LastError), false);
 		CloseHandle(kv);		
 		
@@ -1645,7 +1648,7 @@ public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:d
 		SetFailState("%sCould not reach database '%s'! Error: %s", PLUGIN_LOGPREFIX, SQL_DEFAULTDBNAME, error);
 		return;
 	} else {
-		LogMessage("%sSucessfully connected to SQLite database '%s'", PLUGIN_LOGPREFIX, SQL_DEFAULTDBNAME);
+		LogMessage("%sSucessfully connected to %s database '%s'", PLUGIN_LOGPREFIX, SQL_DBTYPE, SQL_DEFAULTDBNAME);
 		g_db = hndl;
 		SQL_InitDB();
 	}
