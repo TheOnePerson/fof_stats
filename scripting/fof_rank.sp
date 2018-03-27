@@ -19,6 +19,17 @@
 	
 	****
 
+	Important advice to potential fellow developers: 
+	You will find an ugly mix of old syntax and new transitional sourcepawn
+	syntax in this plugin code. You know how it goes: you have existing
+	code that you re-use, you have new parts to code, and you also have
+	a life, so you don't want to rewrite *everything* from scratch! ;-)
+	So: if you happen to use some of the lines below for your own plugin,
+	please don't be as lazy as I have been! Better do it properly and stick 
+	to the new transitional syntax. Thank you!
+	
+	****
+
 	Make sure that fof_rank.cfg is in your sourcemod/configs/ directory.
 	You can tweak the ranking point system there.
 
@@ -34,13 +45,13 @@
 */
 
 /**
- * TODO: implement killstreak top 10
+ * TODO: implement killstreak top 10 (perhaps...)
  */
 
 /*
 	Uncomment the database engine you want to use:
 */
-#define ENGINE_SQLITE
+//#define ENGINE_SQLITE
 //#define ENGINE_MYSQL
 
 
@@ -56,7 +67,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"1.1.1m"
+#define PLUGIN_VERSION 		"1.2.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -84,16 +95,19 @@
 
 #define CVAR_VERSION "sm_rank_version"
 #define CVAR_ENABLED "sm_rank_enabled"
+#define CVAR_DBENGINE "sm_rank_db_engine"
 #define CVAR_ANNOUNCEPLAYERS "sm_rank_announceplayers"
 #define CVAR_SHOWPANELS "sm_rank_showpanels"
 #define CVAR_INFORMPOINTS "sm_rank_informpoints"
 #define CVAR_ROUNDSUMMARY "sm_rank_roundsummary"
 
-#if defined ENGINE_SQLITE
-	#include <fof_rank_sqlite.inc>	// SQLite specific declarations
-#else
-	#include <fof_rank_mysql.inc>	// MySQL specific declarations
-#endif
+//#if defined ENGINE_SQLITE
+//	#include <fof_rank_sqlite.inc>	// SQLite specific declarations
+//#else
+//	#include <fof_rank_mysql.inc>	// MySQL specific declarations
+//#endif
+
+#include <fof_rank_sqls.inc>	// Database specific functions
 
 // Plugin definitions
 public Plugin:myinfo = 
@@ -149,6 +163,7 @@ new g_ConfigLine;								// for config file parsing: keeps track of the current 
 new g_currentWeaponConfig[enumConfigWeaponDetails];
 
 new g_ServerID = 1;								// ID of the current server (normally 1)
+new bool:g_SQLite = true;
 new bool:g_Enabled = true;
 new bool:g_Warmup = false;
 new bool:g_AnnouncePlayers = true;
@@ -201,14 +216,7 @@ public OnPluginStart() {
 	HookConVarChange(g_CvarInformPoints, CVar_InformPointsChanged);
 	HookConVarChange(g_CvarRoundSummary, CVar_RoundSummaryChanged);
 	
-	SQL_OpenDB();
-	
 	AutoExecConfig();
-	
-	// Hook events
-	HookEvent("player_death", Event_PlayerDeath);
-	HookEvent("player_spawn", Event_PlayerSpawn);
-	HookEvent("round_end", Event_RoundEnd);
 	
 }
 
@@ -219,6 +227,14 @@ public OnPluginEnd() {
 
 public void OnConfigsExecuted() {
 	MyLoadConfig();
+	
+	SQL_OpenDB();
+	
+	// Hook events
+	HookEvent("player_death", Event_PlayerDeath);
+	HookEvent("player_spawn", Event_PlayerSpawn);
+	HookEvent("round_end", Event_RoundEnd);
+	
 	// set all clients to silent init state
 	decl i;
 	for (i = 0; i < sizeof(g_PlayerSilentInit); i++)
@@ -287,7 +303,7 @@ public void OnClientPostAdminCheck(client) {
 			SQL_EscapeString(g_db, playerName, playerNameEsc, sizeof(playerNameEsc));
 			decl String:Sql[SQL_MAX_LENGTH];
 			// Format(Sql, sizeof(Sql), SQL_INSERT_PLAYER, steamID, playerNameEsc, steamID, playerIp);
-			DB_Format_SQL_INSERT_PLAYER(Sql, sizeof(Sql), steamID, playerNameEsc, playerIp);
+			DB_Format_SQL_INSERT_PLAYER(g_SQLite, Sql, sizeof(Sql), steamID, playerNameEsc, playerIp);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 			// Get player's db ID (to store it in array)
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERID, steamID);
@@ -314,7 +330,7 @@ public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], 
 				loginInc = 0;
 			else
 				loginInc = 1;
-			DB_Format_SQL_INSERT_PLAYERSTAT(Sql, sizeof(Sql), g_PlayerDbId[client], g_ServerID, loginInc);
+			DB_Format_SQL_INSERT_PLAYERSTAT(g_SQLite, Sql, sizeof(Sql), g_PlayerDbId[client], g_ServerID, loginInc);
 			SQL_TQuery(g_db, SQL_UpdatePlayerStats, Sql, data);
 		}
 }
@@ -475,9 +491,11 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 	if (!IsFakeClient(client) && g_Enabled) {
 		new playtime = RoundToZero(GetClientTime(client));
 		g_PlayerSpawnedAt[client] = playtime;
-		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_UPDATE_SPAWNS, g_PlayerDbId[client], g_ServerID);
-		SQL_TQuery(g_db, SQL_LogError, Sql);
+		if (g_db != INVALID_HANDLE) {
+			decl String:Sql[SQL_MAX_LENGTH];
+			Format(Sql, sizeof(Sql), SQL_UPDATE_SPAWNS, g_PlayerDbId[client], g_ServerID);
+			SQL_TQuery(g_db, SQL_LogError, Sql);
+		}
 		
 #if defined DEBUG
 		// PrintToServer("%s+++++ Event_PlayerSpawn +++++ / Current Time: %d, Last Login: %d, Delta: %d", PLUGIN_LOGPREFIX, GetTime(), g_PlayerPreviousLogin[client], GetTime() - g_PlayerPreviousLogin[client]); // DEBUG
@@ -523,7 +541,7 @@ public Action:Timer_InitWelcomePanel(Handle:timer, any:client) {
  * @param client		client id
  */
 public Action:Timer_InitExplanationPanel(Handle:timer, any:client) {
-	if (IsClientConnected(client) && !IsFakeClient(client)) {
+	if (IsClientConnected(client) && !IsFakeClient(client) && (g_db != INVALID_HANDLE)) {
 		decl String:Sql[SQL_MAX_LENGTH];
 		Format(Sql, sizeof(Sql), SQL_SELECT_TOP10, GetTime() - g_MaxIdleSecs, 0, 3);
 		SQL_TQuery(g_db, SQL_InitExplanationPanel, Sql, GetClientUserId(client));
@@ -610,7 +628,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 				headshotInc = 1;
 			else
 				headshotInc = 0;
-			DB_Format_SQL_INSERT_WEAPONSTAT_KILLS(Sql, sizeof(Sql), g_PlayerDbId[attackerId], g_ServerID, weaponIdx, headshotInc);
+			DB_Format_SQL_INSERT_WEAPONSTAT_KILLS(g_SQLite, Sql, sizeof(Sql), g_PlayerDbId[attackerId], g_ServerID, weaponIdx, headshotInc);
 #if defined DEBUG
 			PrintToServer("%sSQL_INSERT_WEAPONSTAT_KILLS: %s", PLUGIN_LOGPREFIX, Sql);
 #endif
@@ -666,7 +684,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		}
 		if (g_PlayerDbId[attackerId] > 0 && g_PlayerDbId[victimId] > 0) {
 			// write kill log
-			DB_Format_SQL_INSERT_KILLLOG(Sql, sizeof(Sql), g_PlayerDbId[attackerId], g_ServerID, g_PlayerDbId[victimId]);
+			DB_Format_SQL_INSERT_KILLLOG(g_SQLite, Sql, sizeof(Sql), g_PlayerDbId[attackerId], g_ServerID, g_PlayerDbId[victimId]);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
 	}
@@ -704,7 +722,11 @@ public Action:Top10Handler(client, args) {
 			} else
 				startFrom--;
 		}
-		InitRankList(client, startFrom, 1);
+		if (client == 0) {
+			// this command cannot be issued from the console
+			ReplyToCommand(client, "%t", "CommandReplyFromConsole");
+		} else
+			InitRankList(client, startFrom, 1);
 	}
  	return Plugin_Handled;
 }
@@ -1006,7 +1028,7 @@ public Action:Timer_RoundSummary(Handle:timer, any:data) {
 			}
 		// collect current players ranks
 		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_RANKS, GetTime() - g_MaxIdleSecs, playerIds);
+		DB_Format_SQL_SELECT_RANKS(g_SQLite, Sql, sizeof(Sql), GetTime() - g_MaxIdleSecs, playerIds);
 		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
 		return Plugin_Stop;
 	} else
@@ -1087,6 +1109,7 @@ public Action:PlayerCommandHandler(client, args) {
 	// determine command
 	decl String:strTarget[MAX_NAME_LENGTH];
 	GetCmdArg(0, strTarget, sizeof(strTarget));
+
 	if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0) {
 		commandType = 1;
 		if (args != 2) {
@@ -1168,12 +1191,17 @@ public Action:PlayerCommandHandler(client, args) {
  *
  */
 public Action:RankCommandHandler(client, args) {
+	if (client == 0) {
+		// this command cannot be issued from the console
+		ReplyToCommand(client, "%t", "CommandReplyFromConsole");
+		return Plugin_Handled;
+	}
 	if (IsClientConnected(client) && !IsFakeClient(client)) {
 		// show round summary
 		decl String:playerIds[12];
 		IntToString(g_PlayerDbId[client], playerIds, sizeof(playerIds));
 		decl String:Sql[SQL_MAX_LENGTH];
-		Format(Sql, sizeof(Sql), SQL_SELECT_RANKS, GetTime() - g_MaxIdleSecs, playerIds);
+		DB_Format_SQL_SELECT_RANKS(g_SQLite, Sql, sizeof(Sql), GetTime() - g_MaxIdleSecs, playerIds);
 		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
 	}
 	// initiate rank panel
@@ -1501,7 +1529,7 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 }
 
 /**
- * Handler for panel events - nothing is done here...
+ * Handler for panel events - nothing to do here...
  */
 public int EmptyPanelHandler(Menu menu, MenuAction action, int param1, int param2)
 {
@@ -1614,13 +1642,15 @@ void ResetPlayer(const client) {
 //
 
 /**
- * Open database or create it, if needed
+ * Open database or create it if needed
  */
 bool:SQL_OpenDB() {
 	new bool:Result = false;
-	if (SQL_CheckConfig(SQL_DEFAULTDBNAME))
-		SQL_TConnect(SQL_Connected, SQL_DEFAULTDBNAME);
+	if (SQL_CheckConfig(SQL_DBNAME))
+		SQL_TConnect(SQL_Connected, SQL_DBNAME);
 	else {
+		// no database config specified - use sqlite version
+		g_SQLite = true;
 		new Handle:kv;
 		kv = CreateKeyValues("");
 		DB_SetConnectionKV(kv);
@@ -1628,9 +1658,9 @@ bool:SQL_OpenDB() {
 		CloseHandle(kv);		
 		
 		if (g_db == INVALID_HANDLE)
-			LogMessage("%sFailed to connect to database '%s': %s", PLUGIN_LOGPREFIX, SQL_DEFAULTDBNAME, g_LastError);
+			LogMessage("%sFailed to connect to sqlite database '%s': %s", PLUGIN_LOGPREFIX, SQL_DBNAME, g_LastError);
 		else {
-			LogMessage("%sSucessfully connected to %s database '%s'", PLUGIN_LOGPREFIX, SQL_DBTYPE, SQL_DEFAULTDBNAME);
+			LogMessage("%sSucessfully connected to sqlite database '%s'", PLUGIN_LOGPREFIX, SQL_DBNAME);
 			SQL_InitDB();
 			Result = true;
 		}
@@ -1644,11 +1674,20 @@ bool:SQL_OpenDB() {
 public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:data)
 {
 	if (hndl == INVALID_HANDLE || !StrEqual(error, ""))	{
-		LogMessage("%sFailed to connect to database '%s': %s", PLUGIN_LOGPREFIX, SQL_DEFAULTDBNAME, error);
-		SetFailState("%sCould not reach database '%s'! Error: %s", PLUGIN_LOGPREFIX, SQL_DEFAULTDBNAME, error);
+		LogMessage("%sFailed to connect to database '%s': %s", PLUGIN_LOGPREFIX, SQL_DBNAME, error);
+		SetFailState("%sCould not reach database '%s'! Error: %s", PLUGIN_LOGPREFIX, SQL_DBNAME, error);
 		return;
 	} else {
-		LogMessage("%sSucessfully connected to %s database '%s'", PLUGIN_LOGPREFIX, SQL_DBTYPE, SQL_DEFAULTDBNAME);
+		// Determine db engine
+		Database db = view_as<Database>(hndl);
+		DBDriver driver = db.Driver;
+		decl String:DBEngine[10];
+		driver.GetProduct(DBEngine, sizeof(DBEngine));
+		g_SQLite = (strcmp(DBEngine, "SQLite") == 0);
+#if defined DEBUG
+		PrintToServer("%s*** SQL_Connected ***: Flag SQLite: %d, db engine: %s", PLUGIN_LOGPREFIX, g_SQLite, DBEngine);
+#endif
+		LogMessage("%sSucessfully connected to %s database '%s'", PLUGIN_LOGPREFIX, DBEngine, SQL_DBNAME);
 		g_db = hndl;
 		SQL_InitDB();
 	}
@@ -1662,15 +1701,15 @@ void SQL_InitDB() {
 	if (g_db != INVALID_HANDLE) {
 		// This is only the basic schema version, for updates view routine SQL_CheckVersion further down
 		SQL_LockDatabase(g_db);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_Players);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_Servers);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_Version);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_WeaponStats);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_Players_Idx);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx1);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx2);
-		SQL_FastQuery(g_db, SQL_CREATE_TBL_PlayerStats_Idx3);
+		DB_Create_Tbl_Players(g_db, g_SQLite);
+		DB_Create_Tbl_PlayersStats(g_db, g_SQLite);
+		DB_Create_Tbl_Servers(g_db, g_SQLite);
+		DB_Create_Tbl_Version(g_db, g_SQLite);
+		DB_Create_Tbl_WeaponStats(g_db, g_SQLite);
+		DB_Create_Idx_Players(g_db, g_SQLite);
+		DB_Create_Idx_Players_1(g_db, g_SQLite);
+		DB_Create_Idx_Players_2(g_db, g_SQLite);
+		DB_Create_Idx_Players_3(g_db, g_SQLite);
 		SQL_UnlockDatabase(g_db);
 		// Check schema version and apply changes
 		SQL_TQuery(g_db, SQL_CheckVersion, SQL_SELECT_SCHEMAVERSION);
@@ -1689,25 +1728,25 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 		}
 		SQL_LockDatabase(g_db);
 		if (version < 2) {
-			SQL_FastQuery(g_db, SQL_CREATE_TBL_KillLog);
-			SQL_FastQuery(g_db, SQL_CREATE_TBL_KillLog_Idx1);
+			DB_Create_Tbl_KillLog(g_db, g_SQLite);
+			DB_Create_Idx_KillLog_1(g_db, g_SQLite);
 		}
 		if (version < 3) {
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_1);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_2);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_3);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_4);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_5);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_6);
+			DB_Update_3_1(g_db, g_SQLite);
+			DB_Update_3_2(g_db, g_SQLite);
+			DB_Update_3_3(g_db, g_SQLite);
+			DB_Update_3_4(g_db, g_SQLite);
+			DB_Update_3_5(g_db, g_SQLite);
+			DB_Update_3_6(g_db, g_SQLite);
 		}
 		if (version < 4) {
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_1);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_2);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_4_3);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_4_4);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_5);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_3_6);
-			SQL_FastQuery(g_db, SQL_SCHEMA_VERSION_CLEANUP);
+			DB_Update_3_1(g_db, g_SQLite);
+			DB_Update_3_2(g_db, g_SQLite);
+			DB_Update_4_3(g_db, g_SQLite);
+			DB_Update_4_4(g_db, g_SQLite);
+			DB_Update_3_5(g_db, g_SQLite);
+			DB_Update_3_6(g_db, g_SQLite);
+			DB_Cleanup(g_db, g_SQLite);
 			SQL_UnlockDatabase(g_db);
 			// Save latest schema version
 			decl String:Sql[SQL_MAX_LENGTH];

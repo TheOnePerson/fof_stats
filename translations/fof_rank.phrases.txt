@@ -13,6 +13,10 @@
 	{
 		"en"		"Usage: %s [<rank>]\nShows the ranking list. If <rank> is given, the listing starts at this rank."
 	}
+	"CommandReplyFromConsole"
+	{
+		"en"		"I'm sorry, but this command cannot be issued from the console."
+	}
 	"CommandReplyGivePoints"
 	{
 		"en"		"Usage: %s <name|#userid> <points>\nGive <points> to user(s). To set the points to a certain value, use this: %s <name|#userid> =<points>"
