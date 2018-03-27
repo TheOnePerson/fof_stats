@@ -48,13 +48,6 @@
  * TODO: implement killstreak top 10 (perhaps...)
  */
 
-/*
-	Uncomment the database engine you want to use:
-*/
-//#define ENGINE_SQLITE
-//#define ENGINE_MYSQL
-
-
 // Uncomment the line below to get a whole bunch of PrintToServer debug messages...
 //#define DEBUG
 
@@ -67,7 +60,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"1.2.0"
+#define PLUGIN_VERSION 		"1.2.1"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -100,12 +93,6 @@
 #define CVAR_SHOWPANELS "sm_rank_showpanels"
 #define CVAR_INFORMPOINTS "sm_rank_informpoints"
 #define CVAR_ROUNDSUMMARY "sm_rank_roundsummary"
-
-//#if defined ENGINE_SQLITE
-//	#include <fof_rank_sqlite.inc>	// SQLite specific declarations
-//#else
-//	#include <fof_rank_mysql.inc>	// MySQL specific declarations
-//#endif
 
 #include <fof_rank_sqls.inc>	// Database specific functions
 
@@ -217,7 +204,12 @@ public OnPluginStart() {
 	HookConVarChange(g_CvarRoundSummary, CVar_RoundSummaryChanged);
 	
 	AutoExecConfig();
-	
+
+	// Hook events
+	HookEvent("player_death", Event_PlayerDeath);
+	HookEvent("player_spawn", Event_PlayerSpawn);
+	HookEvent("round_end", Event_RoundEnd);
+
 }
 
 public OnPluginEnd() {
@@ -229,11 +221,6 @@ public void OnConfigsExecuted() {
 	MyLoadConfig();
 	
 	SQL_OpenDB();
-	
-	// Hook events
-	HookEvent("player_death", Event_PlayerDeath);
-	HookEvent("player_spawn", Event_PlayerSpawn);
-	HookEvent("round_end", Event_RoundEnd);
 	
 	// set all clients to silent init state
 	decl i;
@@ -570,7 +557,7 @@ public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
  * Event Handler for PlayerDeath
  */
 public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) {
-	if (!g_Warmup && g_Enabled) {
+	if (!g_Warmup && g_Enabled && g_db) {
 		new victimId = GetEventInt(event, "userid");
 		new attackerId = GetEventInt(event, "attacker");
 		new assistId = GetEventInt(event, "assist");
