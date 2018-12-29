@@ -60,7 +60,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"1.2.1"
+#define PLUGIN_VERSION 		"1.2.2"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -128,6 +128,8 @@ new Handle:g_CvarFofWarmupTime = INVALID_HANDLE;
 
 // global dynamic arrays
 new Handle:g_WeaponDetails = INVALID_HANDLE;	// list of arrays holding the points per weapon
+new Handle:g_ClientsToInit = INVALID_HANDLE;	// list of client id, that need to be initialized (in case OnClientPostAdminCheck was initiated too early)
+
 
 // global static arrays
 new g_PlayerMaxKillstreak[MAXPLAYERS + 1];		// array for storing max killstreak of players (easier to handle than always requesting from db)
@@ -151,6 +153,7 @@ new g_currentWeaponConfig[enumConfigWeaponDetails];
 
 new g_ServerID = 1;								// ID of the current server (normally 1)
 new bool:g_SQLite = true;
+new bool:g_DBInit = false;
 new bool:g_Enabled = true;
 new bool:g_Warmup = false;
 new bool:g_AnnouncePlayers = true;
@@ -178,6 +181,8 @@ public OnPluginStart() {
 	LoadTranslations(TRANSLATIONS_FILENAME);
 	
 	g_WeaponDetails = CreateArray(enumConfigWeaponDetails);
+	g_ClientsToInit = CreateArray();
+	g_DBInit = false;
 	
 	CreateConVar(CVAR_VERSION, PLUGIN_VERSION, "FoF Ranking and Statistics version", FCVAR_NOTIFY | FCVAR_REPLICATED | FCVAR_DONTRECORD | FCVAR_SPONLY);
 	g_CvarEnabled = CreateConVar(CVAR_ENABLED, "1", "1 enables the FoF Ranking plugin, 0 disables it.", FCVAR_NONE, true, 0.0, true, 1.0);
@@ -270,7 +275,7 @@ public CVar_RoundSummaryChanged(Handle:cvar, const String:oldval[], const String
 public void OnClientPostAdminCheck(client) {
 	if (client <= MaxClients && !IsFakeClient(client)) {
 #if defined DEBUG
-		PrintToServer("%sConnecting client id %d...", PLUGIN_LOGPREFIX, client); // DEBUG
+		PrintToServer("%sConnecting client id %d... / db handle = %d", PLUGIN_LOGPREFIX, client, g_db); // DEBUG
 #endif
 		g_PlayerKillstreak[client] = 0;		// should already be 0, but who knows...
 		g_PlayerMaxKillstreak[client] = 0;
@@ -295,8 +300,8 @@ public void OnClientPostAdminCheck(client) {
 			// Get player's db ID (to store it in array)
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERID, steamID);
 			SQL_TQuery(g_db, SQL_SelectPlayerID, Sql, GetClientUserId(client));
-		}
-		
+		} else
+			if (!g_DBInit) PushArrayCell(g_ClientsToInit, client);
 	}
 }
 
@@ -306,9 +311,15 @@ public void OnClientPostAdminCheck(client) {
 public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
+#if defined DEBUG
+	PrintToServer("%sExecuting SQL_SelectPlayerID for client %d...", PLUGIN_LOGPREFIX, client); // DEBUG
+#endif
 	if (client > 0)
 		if (SQL_FetchRow(hndl)) {
 			g_PlayerDbId[client] = SQL_FetchInt(hndl, 0);
+#if defined DEBUG
+			PrintToServer("%s+++++ client %d has database id %D +++++", PLUGIN_LOGPREFIX, client, g_PlayerDbId[client]); // DEBUG
+#endif
 			// Insert or update playerstats entry
 			decl String:Sql[SQL_MAX_LENGTH];
 			decl loginInc;
@@ -578,6 +589,11 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		victimId = GetClientOfUserId(victimId);
 		attackerId = GetClientOfUserId(attackerId);
 		assistId = GetClientOfUserId(assistId);
+#if defined DEBUG
+		Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: user database id=%d, attacker database id=%d",  
+			g_PlayerDbId[victimId], g_PlayerDbId[attackerId]);
+		LogMessage(msg);
+#endif		
 		if (g_PlayerDbId[victimId] > 0) {
 			g_PlayerKillstreak[victimId] = 0;
 			// increase victim's death counter, store time alive and substract points
@@ -609,7 +625,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 		}
 		if (g_PlayerDbId[attackerId] > 0 && victimId != attackerId) {
 			// find the weapon data and give points to attacker
-			new rankPoints = GetKillPointsToWeaponIdx(weaponIdx, !headshot);
+			new rankPoints = GetKillPointsToWeaponIdx(weaponIdx, !headshot, weaponName);
 			decl headshotInc;
 			if (headshot)
 				headshotInc = 1;
@@ -1276,72 +1292,73 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		SQL_FetchRow(hndl);
-		decl String:playerName[MAX_NAME_LENGTH];
-		SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
-		new kills = SQL_FetchInt(hndl, 4);
-		new deaths = SQL_FetchInt(hndl, 8);
-		g_CurrentStatsPlayerId[client] = SQL_FetchInt(hndl, 0);
-		new timeSinceSpawn = RoundToZero(GetClientTime(client)) - g_PlayerSpawnedAt[client];
-		new timeAlive = SQL_FetchInt(hndl, 10) + timeSinceSpawn;
-		new spawns = SQL_FetchInt(hndl, 11);
-		
-		decl String:panelLine[MAX_PANELLINE_LENGTH];
-		Panel panel = new Panel();
-		// check if this is the spawn welcome message
-		if (timeSinceSpawn < 10)
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_WelcomeTitle", client, playerName);
-		else
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Title", client, playerName);
-		panel.SetTitle(panelLine);
-		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line1", client, SQL_FetchInt(hndl, 2), g_ActivePlayers);
-		panel.DrawText(panelLine);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line2", client, SQL_FetchInt(hndl, 3));
-		panel.DrawText(panelLine);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line3", client, kills, SQL_FetchInt(hndl, 5));
-		panel.DrawText(panelLine);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line4", client, SQL_FetchInt(hndl, 6));
-		panel.DrawText(panelLine);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line5", client, SQL_FetchInt(hndl, 7));
-		panel.DrawText(panelLine);
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line6", client, deaths, SQL_FetchInt(hndl, 9));
-		panel.DrawText(panelLine);
-		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		if (timeAlive > 0) {
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line7", client, timeAlive / (60 * 60), (timeAlive / 60) % 60);
+		if (SQL_FetchRow(hndl)) {
+			decl String:playerName[MAX_NAME_LENGTH];
+			SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
+			new kills = SQL_FetchInt(hndl, 4);
+			new deaths = SQL_FetchInt(hndl, 8);
+			g_CurrentStatsPlayerId[client] = SQL_FetchInt(hndl, 0);
+			new timeSinceSpawn = RoundToZero(GetClientTime(client)) - g_PlayerSpawnedAt[client];
+			new timeAlive = SQL_FetchInt(hndl, 10) + timeSinceSpawn;
+			new spawns = SQL_FetchInt(hndl, 11);
+			
+			decl String:panelLine[MAX_PANELLINE_LENGTH];
+			Panel panel = new Panel();
+			// check if this is the spawn welcome message
+			if (timeSinceSpawn < 10)
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_WelcomeTitle", client, playerName);
+			else
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Title", client, playerName);
+			panel.SetTitle(panelLine);
+			panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line1", client, SQL_FetchInt(hndl, 2), g_ActivePlayers);
 			panel.DrawText(panelLine);
-		}
-		if (timeAlive > 0) {
-			timeAlive = timeAlive / spawns;
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line8", client, timeAlive / 60, timeAlive % 60);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line2", client, SQL_FetchInt(hndl, 3));
 			panel.DrawText(panelLine);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line3", client, kills, SQL_FetchInt(hndl, 5));
+			panel.DrawText(panelLine);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line4", client, SQL_FetchInt(hndl, 6));
+			panel.DrawText(panelLine);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line5", client, SQL_FetchInt(hndl, 7));
+			panel.DrawText(panelLine);
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line6", client, deaths, SQL_FetchInt(hndl, 9));
+			panel.DrawText(panelLine);
+			panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+			if (timeAlive > 0) {
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line7", client, timeAlive / (60 * 60), (timeAlive / 60) % 60);
+				panel.DrawText(panelLine);
+			}
+			if (timeAlive > 0) {
+				timeAlive = timeAlive / spawns;
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line8", client, timeAlive / 60, timeAlive % 60);
+				panel.DrawText(panelLine);
+			}
+			float kdRatio = 999.99;
+			if (deaths != 0)
+				kdRatio = FloatDiv(float(kills), float(deaths));
+			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line9", client, kdRatio);
+			panel.DrawText(panelLine);
+			panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
+			if (g_PlayerDbId[client] == SQL_FetchInt(hndl, 0)) {
+				// player watches her/his own statistics
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers", client);
+				panel.DrawItem(panelLine);
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims", client);
+				panel.DrawItem(panelLine);
+			} else {
+				// player watches statistics of somebody else
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers3rd", client);
+				panel.DrawItem(panelLine);
+				Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims3rd", client);
+				panel.DrawItem(panelLine);
+			}
+			for (new i = 1; i <= 7; i++)
+				panel.DrawItem("", ITEMDRAW_NOTEXT);
+			Format(panelLine, sizeof(panelLine), "%T", "Close", client);
+			panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
+			panel.Send(client, RankingPanelHandler, 30);
+			delete panel;
 		}
-		float kdRatio = 999.99;
-		if (deaths != 0)
-			kdRatio = FloatDiv(float(kills), float(deaths));
-		Format(panelLine, sizeof(panelLine), "%T", "RankPanel_Line9", client, kdRatio);
-		panel.DrawText(panelLine);
-		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		if (g_PlayerDbId[client] == SQL_FetchInt(hndl, 0)) {
-			// player watches her/his own statistics
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers", client);
-			panel.DrawItem(panelLine);
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims", client);
-			panel.DrawItem(panelLine);
-		} else {
-			// player watches statistics of somebody else
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowKillers3rd", client);
-			panel.DrawItem(panelLine);
-			Format(panelLine, sizeof(panelLine), "%T", "RankPanel_ShowVictims3rd", client);
-			panel.DrawItem(panelLine);
-		}
-		for (new i = 1; i <= 7; i++)
-			panel.DrawItem("", ITEMDRAW_NOTEXT);
-		Format(panelLine, sizeof(panelLine), "%T", "Close", client);
-		panel.DrawItem(panelLine, ITEMDRAW_CONTROL);
-		panel.Send(client, RankingPanelHandler, 30);
-		delete panel;
 	}
 }
 
@@ -1560,10 +1577,11 @@ public Action:DebugCommandHandler(client, args) {
  * @param getKillPoints			true to receive kill points, false to receive headshot points 
  * @return
  */
-GetKillPointsToWeaponIdx(const weaponIdx, const bool:getKillPoints) {
+GetKillPointsToWeaponIdx(const weaponIdx, const bool:getKillPoints, const String:weaponName[]) {
 	new max = GetArraySize(g_WeaponDetails);
 	new thisWC[enumConfigWeaponDetails];
 	decl points;
+	new bool:found = false;
 	if (getKillPoints) 
 		points = g_DefaultPointsPerKill;
 	else
@@ -1571,12 +1589,17 @@ GetKillPointsToWeaponIdx(const weaponIdx, const bool:getKillPoints) {
 	for (new i = 0; i < max; i++) {
 		GetArrayArray(g_WeaponDetails, i, thisWC[0]);
 		if (thisWC[cs_WeaponIdx] == weaponIdx) {
+			found = true;
 			if (getKillPoints) 
 				points = thisWC[cs_PointsPerKill];
 			else
 				points = thisWC[cs_PointsPerHeadshot];
 			break;
 		}
+	}
+	if (!found) {
+		// unknown weapon index - log this!
+		LogMessage("%sWarning: Weapon index %i ('%s') has not been found in config file.", PLUGIN_LOGPREFIX, weaponIdx, weaponName);
 	}
 	return points;
 }
@@ -1633,6 +1656,7 @@ void ResetPlayer(const client) {
  */
 bool:SQL_OpenDB() {
 	new bool:Result = false;
+	g_DBInit = false;
 	if (SQL_CheckConfig(SQL_DBNAME))
 		SQL_TConnect(SQL_Connected, SQL_DBNAME);
 	else {
@@ -1663,6 +1687,7 @@ public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:d
 	if (hndl == INVALID_HANDLE || !StrEqual(error, ""))	{
 		LogMessage("%sFailed to connect to database '%s': %s", PLUGIN_LOGPREFIX, SQL_DBNAME, error);
 		SetFailState("%sCould not reach database '%s'! Error: %s", PLUGIN_LOGPREFIX, SQL_DBNAME, error);
+		g_DBInit = true;
 		return;
 	} else {
 		// Determine db engine
@@ -1677,6 +1702,16 @@ public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:d
 		LogMessage("%sSucessfully connected to %s database '%s'", PLUGIN_LOGPREFIX, DBEngine, SQL_DBNAME);
 		g_db = hndl;
 		SQL_InitDB();
+		g_DBInit = true;
+		// Check if we need to init some clients (due to race conditions)
+		if (g_ClientsToInit != INVALID_HANDLE) {
+			new arraySize = GetArraySize(g_ClientsToInit);
+			while (arraySize > 0) {
+				OnClientPostAdminCheck(GetArrayCell(g_ClientsToInit, arraySize - 1));
+				RemoveFromArray(g_ClientsToInit, arraySize - 1);
+				arraySize -= 1;
+			}
+		}			
 	}
 }
 
