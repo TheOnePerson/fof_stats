@@ -213,6 +213,8 @@ stock void DB_Format_SQL_INSERT_PLAYERSTAT(const bool:sqlite, String:Sql[], int 
 // This SQL seems a bit complicated, but it covers multiserver functionality!
 #define SQL_SELECT_PLAYERSRANK2 "SELECT %i, COUNT(PlayerID) FROM (SELECT PlayerID FROM PlayerStats WHERE Lastenter > %d AND Spawns > 0 \
 	GROUP BY PlayerID HAVING SUM(Points) > (SELECT SUM(Points) FROM PlayerStats WHERE PlayerID = %i)) AS Num"
+	
+#define SQL_SELECT_PLAYERBYNAME "SELECT ID FROM Players WHERE Name = '%s';"
 
 #define SQL_SELECT_TOTALPLAYERS "SELECT COUNT(DISTINCT p.ID) FROM Players AS p INNER JOIN PlayerStats AS s ON s.PlayerID = p.ID \
 	WHERE s.Lastenter > %d AND s.Spawns > 0;"

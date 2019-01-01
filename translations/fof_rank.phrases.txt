@@ -17,6 +17,10 @@
 	{
 		"en"		"I'm sorry, but this command cannot be issued from the console."
 	}
+	"CommandReplyPlayerNotFound"
+	{
+		"en"		"Could not find a player named '%s' in the database. Maybe you mistyped the name or this player has never been on this server?"
+	}
 	"CommandReplyGivePoints"
 	{
 		"en"		"Usage: %s <name|#userid> <points>\nGive <points> to user(s). To set the points to a certain value, use this: %s <name|#userid> =<points>"

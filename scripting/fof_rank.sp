@@ -60,7 +60,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"1.2.2"
+#define PLUGIN_VERSION 		"1.2.3"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
@@ -117,18 +117,18 @@ enum enumConfigWeaponDetails
 };
 
 // cvar handles
-new Handle:g_CvarEnabled = INVALID_HANDLE;
-new Handle:g_CvarAnnouncePlayers = INVALID_HANDLE;
-new Handle:g_CvarShowPanels = INVALID_HANDLE;
-new Handle:g_CvarInformPoints = INVALID_HANDLE;
-new Handle:g_CvarRoundSummary = INVALID_HANDLE;
+Handle g_CvarEnabled = INVALID_HANDLE;
+Handle g_CvarAnnouncePlayers = INVALID_HANDLE;
+Handle g_CvarShowPanels = INVALID_HANDLE;
+Handle g_CvarInformPoints = INVALID_HANDLE;
+Handle g_CvarRoundSummary = INVALID_HANDLE;
 
-new Handle:g_CvarFofCurrentMode = INVALID_HANDLE;
-new Handle:g_CvarFofWarmupTime = INVALID_HANDLE;
+Handle g_CvarFofCurrentMode = INVALID_HANDLE;
+Handle g_CvarFofWarmupTime = INVALID_HANDLE;
 
 // global dynamic arrays
-new Handle:g_WeaponDetails = INVALID_HANDLE;	// list of arrays holding the points per weapon
-new Handle:g_ClientsToInit = INVALID_HANDLE;	// list of client id, that need to be initialized (in case OnClientPostAdminCheck was initiated too early)
+Handle g_WeaponDetails = INVALID_HANDLE;	// list of arrays holding the points per weapon
+Handle g_ClientsToInit = INVALID_HANDLE;	// list of client id, that need to be initialized (in case OnClientPostAdminCheck was initiated too early)
 
 
 // global static arrays
@@ -145,8 +145,8 @@ new g_PlayerRankAtRoundstart[MAXPLAYERS + 1];	// stores each clients rank when t
 new g_PlayerPoints[MAXPLAYERS + 1];				// stores each clients current points
 
 // other global vars
-new String:g_LastError[255];					// needed for config file parsing and logging: holds the last error message
-new Handle:g_db = INVALID_HANDLE;				// database connection
+char g_LastError[255];					// needed for config file parsing and logging: holds the last error message
+Handle g_db = INVALID_HANDLE;				// database connection
 new g_SectionDepth;								// for config file parsing: keeps track of the nesting level of sections
 new g_ConfigLine;								// for config file parsing: keeps track of the current line number
 new g_currentWeaponConfig[enumConfigWeaponDetails];
@@ -244,8 +244,8 @@ public void OnConfigsExecuted() {
 /**
  * CVar handlers
  */
-public CVar_EnabledChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
-	decl String:tag[50];
+public CVar_EnabledChanged(Handle cvar, const String:oldval[], const String:newval[]) {
+	char tag[50];
 	if (strcmp(newval, "0") == 0) {
 		g_Enabled = false;
 		strcopy(tag, sizeof(tag), "CVarMessageEnabled");
@@ -255,16 +255,16 @@ public CVar_EnabledChanged(Handle:cvar, const String:oldval[], const String:newv
 	}
 	PrintToChatAll("%s%t%s%t", CHAT_COLORTAG1, "ChatPrefix", CHAT_COLORTAG_NORM, tag);
 }
-public CVar_AnnouncePlayersChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+public CVar_AnnouncePlayersChanged(Handle cvar, const String:oldval[], const String:newval[]) {
 	g_AnnouncePlayers = !(strcmp(newval, "0") == 0);
 }
-public CVar_ShowPanelsChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+public CVar_ShowPanelsChanged(Handle cvar, const String:oldval[], const String:newval[]) {
 	g_ShowPanels = !(strcmp(newval, "0") == 0);
 }
-public CVar_InformPointsChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+public CVar_InformPointsChanged(Handle cvar, const String:oldval[], const String:newval[]) {
 	g_InformAboutPoints = !(strcmp(newval, "0") == 0);
 }
-public CVar_RoundSummaryChanged(Handle:cvar, const String:oldval[], const String:newval[]) {
+public CVar_RoundSummaryChanged(Handle cvar, const String:oldval[], const String:newval[]) {
 	g_RoundSummary = !(strcmp(newval, "0") == 0);
 }
 
@@ -285,15 +285,15 @@ public void OnClientPostAdminCheck(client) {
 		g_PlayerRankAtRoundstart[client] = 0;
 		if (g_db != INVALID_HANDLE) {
 			// Add player entry to db
-			decl String:playerName[MAX_NAME_LENGTH];
-			decl String:playerNameEsc[2 * MAX_NAME_LENGTH + 1];
-			decl String:steamID[STEAMID_LENGTH];
-			decl String:playerIp[20];
+			char playerName[MAX_NAME_LENGTH];
+			char playerNameEsc[2 * MAX_NAME_LENGTH + 1];
+			char steamID[STEAMID_LENGTH];
+			char playerIp[20];
 			GetClientName(client, playerName, sizeof(playerName));
 			GetClientAuthId(client, AuthId_Steam2, steamID, sizeof(steamID));
 			GetClientIP(client, playerIp, sizeof(playerIp), true);
 			SQL_EscapeString(g_db, playerName, playerNameEsc, sizeof(playerNameEsc));
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 			// Format(Sql, sizeof(Sql), SQL_INSERT_PLAYER, steamID, playerNameEsc, steamID, playerIp);
 			DB_Format_SQL_INSERT_PLAYER(g_SQLite, Sql, sizeof(Sql), steamID, playerNameEsc, playerIp);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
@@ -308,7 +308,7 @@ public void OnClientPostAdminCheck(client) {
 /**
  * Callback after executing SQL 'select player ID' / store DB id in local array and prepare welcome actions
  */
-public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_SelectPlayerID(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 #if defined DEBUG
@@ -318,10 +318,10 @@ public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], 
 		if (SQL_FetchRow(hndl)) {
 			g_PlayerDbId[client] = SQL_FetchInt(hndl, 0);
 #if defined DEBUG
-			PrintToServer("%s+++++ client %d has database id %D +++++", PLUGIN_LOGPREFIX, client, g_PlayerDbId[client]); // DEBUG
+			PrintToServer("%s+++++ client %d has database id %d +++++", PLUGIN_LOGPREFIX, client, g_PlayerDbId[client]); // DEBUG
 #endif
 			// Insert or update playerstats entry
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 			decl loginInc;
 			// only increment logins on new players (or else login increases every reload of this plugin)
 			if (GetClientTime(client) >= 30)
@@ -336,11 +336,11 @@ public void SQL_SelectPlayerID(Handle:owner, Handle:hndl, const String:error[], 
 /**
  * Callback after executing SQL 'update player stats' / get killstreak and points and continue
  */
-public void SQL_UpdatePlayerStats(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_UpdatePlayerStats(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		// Determine max killstreak of player for initializing the global array value
 		Format(Sql, sizeof(Sql), SQL_SELECT_MAXKILLSTREAK, g_PlayerDbId[client]);
 		SQL_TQuery(g_db, SQL_SelectMaxKillstreak, Sql, data);
@@ -354,7 +354,7 @@ public void SQL_UpdatePlayerStats(Handle:owner, Handle:hndl, const String:error[
 /**
  * Callback after executing SQL 'select max killstreak' / store killstreak in local array
  */
-public void SQL_SelectMaxKillstreak(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_SelectMaxKillstreak(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0)
@@ -365,14 +365,14 @@ public void SQL_SelectMaxKillstreak(Handle:owner, Handle:hndl, const String:erro
 /**
  * Callback after executing SQL 'select player data on connect' / store some data in local array and announce player to others
  */
-public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_SelectPlayerDataOnConnect(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0)
 		if (SQL_FetchRow(hndl)) {
 			g_PlayerPreviousLogin[client] = SQL_FetchInt(hndl, 1);
 			// Now, after getting the last login time, update it
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_UPDATE_LASTENTER, GetTime(), g_PlayerDbId[client], g_ServerID);
 			SQL_TQuery(g_db, SQL_RefreshActivePlayers, Sql, data);
 			// Store player's rank and points in array
@@ -388,11 +388,11 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 			if (!g_PlayerSilentInit[client] && g_AnnouncePlayers && g_Enabled) {
 				g_PlayerSilentInit[client] = false;
 				// get player's country
-				decl String:playerIp[20]; 
+				char playerIp[20]; 
 				GetClientIP(client, playerIp, sizeof(playerIp), true);
-				decl String:playerCountry[50]; 
+				char playerCountry[50]; 
 				GeoipCountry(playerIp, playerCountry, sizeof(playerCountry));
-				decl String:playerName[MAX_NAME_LENGTH];
+				char playerName[MAX_NAME_LENGTH];
 				GetClientName(client, playerName, sizeof(playerName));
 				if (strlen(playerCountry) > 0) {
 					// announce player with country
@@ -442,15 +442,15 @@ public void SQL_SelectPlayerDataOnConnect(Handle:owner, Handle:hndl, const Strin
 /**
  * Callback for refreshing the no. of active players in db
  */
-public void SQL_RefreshActivePlayers(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_RefreshActivePlayers(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	// refresh total number of active players
-	decl String:Sql[SQL_MAX_LENGTH];
+	char Sql[SQL_MAX_LENGTH];
 	Format(Sql, sizeof(Sql), SQL_SELECT_TOTALPLAYERS, GetTime() - g_MaxIdleSecs);
 	SQL_TQuery(g_db, SQL_GotTotalPlayers, Sql);
 }
 
-public void SQL_GotTotalPlayers(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_GotTotalPlayers(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	if (hndl != INVALID_HANDLE && strlen(error) == 0)
 		if (SQL_FetchRow(hndl))
@@ -470,7 +470,7 @@ public OnClientDisconnect(client) {
 /**
  * Event Handler for PlayerSpawn (store the ClientTime and spawns to be able to determine average time alive)
  */
-public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+public Event_PlayerSpawn(Handle event, const String:name[], bool:dontBroadcast) {
 	// check if a round summary timer should be set
 	if (g_RoundSummary && !g_RoundTimer) {
 		decl timeleft;
@@ -490,7 +490,7 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 		new playtime = RoundToZero(GetClientTime(client));
 		g_PlayerSpawnedAt[client] = playtime;
 		if (g_db != INVALID_HANDLE) {
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_UPDATE_SPAWNS, g_PlayerDbId[client], g_ServerID);
 			SQL_TQuery(g_db, SQL_LogError, Sql);
 		}
@@ -498,7 +498,7 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
 #if defined DEBUG
 		// PrintToServer("%s+++++ Event_PlayerSpawn +++++ / Current Time: %d, Last Login: %d, Delta: %d", PLUGIN_LOGPREFIX, GetTime(), g_PlayerPreviousLogin[client], GetTime() - g_PlayerPreviousLogin[client]); // DEBUG
 		// Just for testing...
-		//decl String:playerName[MAX_NAME_LENGTH];
+		//char playerName[MAX_NAME_LENGTH];
 		//GetClientName(client, playerName, sizeof(playerName));
 		//if (strcmp(playerName, "almostagreatplayer") == 0)
 		//	g_PlayerPreviousLogin[client] = 0;
@@ -523,9 +523,9 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
  * @param timer 		handle for the timer
  * @param client		client id
  */
-public Action:Timer_InitWelcomePanel(Handle:timer, any:client) {
+public Action:Timer_InitWelcomePanel(Handle timer, any:client) {
 	if (IsClientConnected(client) && !IsFakeClient(client)) {
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, g_PlayerDbId[client], GetTime() - g_MaxIdleSecs, g_PlayerDbId[client]);
 		SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
 	}
@@ -538,9 +538,9 @@ public Action:Timer_InitWelcomePanel(Handle:timer, any:client) {
  * @param timer 		handle for the timer
  * @param client		client id
  */
-public Action:Timer_InitExplanationPanel(Handle:timer, any:client) {
+public Action:Timer_InitExplanationPanel(Handle timer, any:client) {
 	if (IsClientConnected(client) && !IsFakeClient(client) && (g_db != INVALID_HANDLE)) {
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		Format(Sql, sizeof(Sql), SQL_SELECT_TOP10, GetTime() - g_MaxIdleSecs, 0, 3);
 		SQL_TQuery(g_db, SQL_InitExplanationPanel, Sql, GetClientUserId(client));
 	}
@@ -550,12 +550,12 @@ public Action:Timer_InitExplanationPanel(Handle:timer, any:client) {
 /**
  * Event Handler for RoundEnd (store the times alive in database and show round summary)
  */
-public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
+public Event_RoundEnd(Handle event, const String:name[], bool:dontBroadcast) {
 	// store times alive in db
 	for (new i = 0; i <= MaxClients; i++) {
 		if (!IsFakeClient(i) && g_Enabled) {
 			if (g_PlayerDbId[i] > 0 && g_PlayerSpawnedAt[i] > 0) {
-				decl String:Sql[SQL_MAX_LENGTH];
+				char Sql[SQL_MAX_LENGTH];
 				Format(Sql, sizeof(Sql), SQL_UPDATE_TIMEALIVE, RoundToZero(GetClientTime(i)) - g_PlayerSpawnedAt[i], g_PlayerDbId[i], g_ServerID);
 				SQL_TQuery(g_db, SQL_LogError, Sql);
 			}
@@ -567,25 +567,25 @@ public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
 /**
  * Event Handler for PlayerDeath
  */
-public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) {
+public Event_PlayerDeath(Handle event, const String:name[], bool:dontBroadcast) {
 	if (!g_Warmup && g_Enabled && g_db) {
 		new victimId = GetEventInt(event, "userid");
 		new attackerId = GetEventInt(event, "attacker");
 		new assistId = GetEventInt(event, "assist");
 		new weaponIdx = GetEventInt(event, "weapon_index");
 		new bool:headshot = GetEventBool(event, "headshot");
-		decl String:weaponName[65];
+		char weaponName[65];
 		GetEventString(event, "weapon", weaponName, sizeof(weaponName));
 		
 #if defined DEBUG
-		decl String:msg[255];
+		char msg[255];
 		Format(msg, sizeof(msg), "*** Event_PlayerDeath ***: userid=%d, attacker=%d, assist=%d, headshot=%d, weapon_index=%d, weapon='%s'",  
 			victimId, attackerId, assistId, headshot, weaponIdx, weaponName);
 		LogMessage(msg);
 #endif
 		
 		// reset victim's killstreak
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		victimId = GetClientOfUserId(victimId);
 		attackerId = GetClientOfUserId(attackerId);
 		assistId = GetClientOfUserId(assistId);
@@ -655,7 +655,7 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 			}
 			// tell attacker about his/her fortune
 			if (g_InformAboutPoints) {
-				decl String:victimName[MAX_NAME_LENGTH];
+				char victimName[MAX_NAME_LENGTH];
 				GetClientName(victimId, victimName, sizeof(victimName));
 				if (headshot)
 					if (rankPoints != 1)
@@ -711,14 +711,14 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) 
 public Action:Top10Handler(client, args) {
 	
 	if (g_Enabled) {
-		decl String:strStartFrom[20];
+		char strStartFrom[20];
 		new startFrom = 0;
 		if (args >= 1) {
 			// starting number specified, get it
 			GetCmdArg(1, strStartFrom, sizeof(strStartFrom));
 			startFrom = StringToInt(strStartFrom);
 			if (startFrom < 1) {
-				decl String:strCommand[MAX_NAME_LENGTH];
+				char strCommand[MAX_NAME_LENGTH];
 				GetCmdArg(0, strCommand, sizeof(strCommand));
 				ReplyToCommand(client, "%t", "CommandReplyTop10", strCommand);
 				return Plugin_Handled;
@@ -750,7 +750,7 @@ void InitRankList(const client, const int startFrom, const int displayItem) {
 		if (IsClientConnected(client) && !IsFakeClient(client)) {
 			g_CurrentMenuState[client][0] = startFrom;
 			g_CurrentMenuState[client][1] = displayItem - 1;
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 		 	Format(Sql, sizeof(Sql), SQL_SELECT_TOP10, GetTime() - g_MaxIdleSecs, startFrom, 500);
 		 	SQL_TQuery(g_db, SQL_ShowRanklist, Sql, GetClientUserId(client));
 		 }
@@ -759,18 +759,18 @@ void InitRankList(const client, const int startFrom, const int displayItem) {
 /**
  * Handler for displaying the ranking list
  */
-public SQL_ShowRanklist(Handle:owner, Handle:hndl, const String:error[], any:data)
+public SQL_ShowRanklist(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		decl String:menuLine[MAX_NAME_LENGTH + 30];
+		char menuLine[MAX_NAME_LENGTH + 30];
 		Menu menu = new Menu(RanklistMenuHandler);
 		Format(menuLine, sizeof(menuLine), "%T", "RanklistTitle", client, g_ActivePlayers);
 		menu.SetTitle(menuLine);
 		new i = 1;
-		decl String:playerName[MAX_NAME_LENGTH];
+		char playerName[MAX_NAME_LENGTH];
 		decl playerId;
-		decl String:item[3 * 8 + 1];
+		char item[3 * 8 + 1];
 		decl playerPoints;
 		while (SQL_FetchRow(hndl)) {
 			SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
@@ -795,7 +795,7 @@ public RanklistMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 {
 	// If an option was selected, init the player panel
 	if (action == MenuAction_Select) {
-		new String:info[3 * 8 + 1];
+		char info[3 * 8 + 1];
 		GetMenuItem(menu, param2, info, sizeof(info));
 		if (strlen(info) == 3 * 8) {
 			new startFrom = StringToInt(info[2 * 8], 16);
@@ -806,7 +806,7 @@ public RanklistMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 			// store information about coming from ranklist - to get back after closing the ranking panel
 			g_CurrentMenuState[param1][0] = startFrom;
 			g_CurrentMenuState[param1][1] = itemNo;
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, itemNo + startFrom, playerId);
 #if defined DEBUG
 			PrintToServer("%sRanklistMenuHandler: %s", PLUGIN_LOGPREFIX, Sql);
@@ -823,11 +823,11 @@ MyLoadConfig() {
 	g_SectionDepth = 0;
 	g_ConfigLine = 0;
 	ResetConfigArray();
-	new String:g_ConfigFile[PLATFORM_MAX_PATH];
+	char g_ConfigFile[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, g_ConfigFile, sizeof(g_ConfigFile), "configs/%s", CONFIG_FILENAME);
 	
 	g_LastError = "";
-	new Handle:parser = SMC_CreateParser();
+	Handle parser = SMC_CreateParser();
 	SMC_SetReaders(parser, Config_NewSection, Config_KeyValue, Config_EndSection);
 	SMC_SetParseEnd(parser, Config_End);
 	SMC_SetRawLine(parser, Config_NewLine);
@@ -835,12 +835,12 @@ MyLoadConfig() {
 	CloseHandle(parser);
 }
 
-public SMCResult:Config_NewLine(Handle:parser, const char[] line, int lineno) {
+public SMCResult:Config_NewLine(Handle parser, const char[] line, int lineno) {
 	g_ConfigLine = lineno;
 	return SMCParse_Continue;
 }
 
-public SMCResult:Config_NewSection(Handle:parser, const String:name[], bool:quotes) {
+public SMCResult:Config_NewSection(Handle parser, const String:name[], bool:quotes) {
 	new SMCResult:result = SMCParse_Continue;
 	g_SectionDepth++;
 
@@ -863,7 +863,7 @@ public SMCResult:Config_NewSection(Handle:parser, const String:name[], bool:quot
 	return result;
 }
 
-public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
+public SMCResult:Config_KeyValue(Handle parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
 	new SMCResult:result = SMCParse_Continue;
 	decl intVal;
 	if (g_SectionDepth == 1) {
@@ -951,7 +951,7 @@ SMCResult:Config_ReplyToParseErrorInt(const String:key[], const String:value[], 
 	return SMCParse_Halt;
 }
 
-public SMCResult:Config_EndSection(Handle:parser) {
+public SMCResult:Config_EndSection(Handle parser) {
 	new SMCResult:result = SMCParse_Continue;
 	if (g_SectionDepth == 2) {
 		// weapon details group ending
@@ -961,7 +961,7 @@ public SMCResult:Config_EndSection(Handle:parser) {
 	return result;
 }
 
-public Config_End(Handle:parser, bool:halted, bool:failed) {
+public Config_End(Handle parser, bool:halted, bool:failed) {
 	if (halted)
 		LogError("Configuration parsing stopped!");
 	if (failed)
@@ -998,7 +998,7 @@ public void OnMapStart() {
  * 
  * @param timer 		handle for the timer
  */
-public Action:Timer_WarmupEnded(Handle:timer, any:data) {
+public Action:Timer_WarmupEnded(Handle timer, any:data) {
 	// now end the warmup time
 	g_Warmup = false;
 #if defined DEBUG
@@ -1012,7 +1012,7 @@ public Action:Timer_WarmupEnded(Handle:timer, any:data) {
  * 
  * @param timer 		handle for the timer
  */
-public Action:Timer_RoundSummary(Handle:timer, any:data) {
+public Action:Timer_RoundSummary(Handle timer, any:data) {
 	
 	decl timeleft;
 	GetMapTimeLeft(timeleft);
@@ -1021,7 +1021,7 @@ public Action:Timer_RoundSummary(Handle:timer, any:data) {
 #endif
 	if (g_RoundSummary) {
 		// initiate round summaries - transform players ids to a string
-		decl String:playerIds[MAXPLAYERS * 12];
+		char playerIds[MAXPLAYERS * 12];
 		IntToString(-1, playerIds, sizeof(playerIds));
 		decl offset;
 		for (new i = 1; i < MaxClients; i++)
@@ -1030,7 +1030,7 @@ public Action:Timer_RoundSummary(Handle:timer, any:data) {
 				Format(playerIds[offset], sizeof(playerIds) - offset - 12, ",%d", g_PlayerDbId[i]);
 			}
 		// collect current players ranks
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		DB_Format_SQL_SELECT_RANKS(g_SQLite, Sql, sizeof(Sql), GetTime() - g_MaxIdleSecs, playerIds);
 		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
 		return Plugin_Stop;
@@ -1042,7 +1042,7 @@ public Action:Timer_RoundSummary(Handle:timer, any:data) {
 /**
  * Callback after executing SQL / got players rank, now present the round summary
  */
-public void SQL_TellRoundSummary(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_TellRoundSummary(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	if (hndl != INVALID_HANDLE && strlen(error) == 0) {
 		decl i;
@@ -1110,7 +1110,7 @@ public void SQL_TellRoundSummary(Handle:owner, Handle:hndl, const String:error[]
 public Action:PlayerCommandHandler(client, args) {
 	new commandType = 0;
 	// determine command
-	decl String:strTarget[MAX_NAME_LENGTH];
+	char strTarget[MAX_NAME_LENGTH];
 	GetCmdArg(0, strTarget, sizeof(strTarget));
 
 	if (strcmp(strTarget, COMMAND_GIVEPOINTS, false) == 0) {
@@ -1125,7 +1125,7 @@ public Action:PlayerCommandHandler(client, args) {
 	if (args >= 1)
 		GetCmdArg(1, strTarget, sizeof(strTarget));
 	
-	new String:targetName[MAX_TARGET_LENGTH];
+	char targetName[MAX_TARGET_LENGTH];
 	decl targetList[MAXPLAYERS + 1];
 	decl targetCount;
 	new bool:tn_is_ml;
@@ -1140,7 +1140,7 @@ public Action:PlayerCommandHandler(client, args) {
 				tn_is_ml)) <= 0) {
 		ReplyToTargetError(client, targetCount);
 	} else {
-		decl String:param2[MAX_TARGET_LENGTH];
+		char param2[MAX_TARGET_LENGTH];
 		if (args >= 2)
 			GetCmdArg(2, param2, sizeof(param2));
 		for (new i = 0; i < targetCount; i++) {
@@ -1163,7 +1163,7 @@ public Action:PlayerCommandHandler(client, args) {
 						// now do it
 						GetClientName(targetList[i], strTarget, sizeof(strTarget));
 						if (g_PlayerDbId[targetList[i]] > 0) {
-							decl String:Sql[SQL_MAX_LENGTH];
+							char Sql[SQL_MAX_LENGTH];
 							if (commandType == 0)
 								Format(Sql, sizeof(Sql), SQL_UPDATE_POINTS_ABSOLUTE, points, g_PlayerDbId[targetList[i]], g_ServerID);
 							else
@@ -1201,9 +1201,9 @@ public Action:RankCommandHandler(client, args) {
 	}
 	if (IsClientConnected(client) && !IsFakeClient(client)) {
 		// show round summary
-		decl String:playerIds[12];
+		char playerIds[12];
 		IntToString(g_PlayerDbId[client], playerIds, sizeof(playerIds));
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		DB_Format_SQL_SELECT_RANKS(g_SQLite, Sql, sizeof(Sql), GetTime() - g_MaxIdleSecs, playerIds);
 		SQL_TQuery(g_db, SQL_TellRoundSummary, Sql);
 	}
@@ -1221,8 +1221,9 @@ public Action:RankCommandHandler(client, args) {
  */
 Action:InitRankCommand(client, args, databaseid = -1) {
 	if (g_Enabled) {
-		decl String:strTarget[MAX_NAME_LENGTH];
-		new showPlayerId = g_PlayerDbId[client];
+		char Sql[SQL_MAX_LENGTH];
+		char strTarget[MAX_NAME_LENGTH];
+		int showPlayerId = g_PlayerDbId[client];
 		if (args >= 1) {
 			// target specified, get client id
 			GetCmdArg(1, strTarget, sizeof(strTarget));
@@ -1230,9 +1231,9 @@ Action:InitRankCommand(client, args, databaseid = -1) {
 			if (strcmp(strTarget, "@me", false) == 0)
 				Format(strTarget, sizeof(strTarget), "#%d", GetClientUserId(client));
 			// analyse target string
-			new String:targetName[MAX_TARGET_LENGTH];
-			decl targetList[MAXPLAYERS + 1];
-			decl targetCount;
+			char targetName[MAX_TARGET_LENGTH];
+			int targetList[MAXPLAYERS + 1];
+			int targetCount;
 			new bool:tn_is_ml;
 			if ((targetCount = ProcessTargetString(
 				strTarget, 
@@ -1243,9 +1244,34 @@ Action:InitRankCommand(client, args, databaseid = -1) {
 				targetName, 
 				sizeof(targetName), 
 				tn_is_ml)) <= 0) {
-					// TODO: check if target is a name, then search for it
-				ReplyToTargetError(client, targetCount);
-				return Plugin_Handled;
+				// check if target is a name, then search for it
+				tn_is_ml = true;	// bad style, but efficient: use this var as error indicator in this block
+				if (g_db != INVALID_HANDLE) {
+					char playernameSql[2 * MAX_NAME_LENGTH + 1];
+					if (SQL_EscapeString(g_db, strTarget, playernameSql, sizeof(playernameSql))) {
+						Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERBYNAME, playernameSql);
+						SQL_LockDatabase(g_db);		// this is needed, because we are not threading here...
+						DBResultSet hndl = SQL_Query(g_db, Sql);
+						if (hndl != INVALID_HANDLE) {
+							if (hndl.FetchRow()) {
+								showPlayerId = hndl.FetchInt(0);
+								hndl.Close();
+								tn_is_ml = false;
+							} else {
+								// nothing found in database - answer accordingly
+								hndl.Close();
+								SQL_UnlockDatabase(g_db);
+								ReplyToCommand(client, "%t", "CommandReplyPlayerNotFound", strTarget);
+								return Plugin_Handled;
+							} 
+						}
+						SQL_UnlockDatabase(g_db);
+					}
+				}
+				if (tn_is_ml) {
+					ReplyToTargetError(client, targetCount);
+					return Plugin_Handled;
+				}
 			} else 
 				showPlayerId = g_PlayerDbId[targetList[0]];
 		}
@@ -1254,7 +1280,6 @@ Action:InitRankCommand(client, args, databaseid = -1) {
 		else
 			g_CurrentMenuState[client][0] = -1;
 		if (showPlayerId > 0 && IsClientConnected(client)) {
-			decl String:Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSRANK2, showPlayerId, GetTime() - g_MaxIdleSecs, showPlayerId);
 			SQL_TQuery(g_db, SQL_GotRankForStatisticsPanel, Sql, GetClientUserId(client));
 		}
@@ -1265,7 +1290,7 @@ Action:InitRankCommand(client, args, databaseid = -1) {
 /**
  * Callback after executing SQL / got player id and rank for intitializing a ranking statistics panel
  */
-public void SQL_GotRankForStatisticsPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_GotRankForStatisticsPanel(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
@@ -1276,7 +1301,7 @@ public void SQL_GotRankForStatisticsPanel(Handle:owner, Handle:hndl, const Strin
 			rank = SQL_FetchInt(hndl, 1);
 		}
 		//g_CurrentMenuState[client][0] = -1;
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		Format(Sql, sizeof(Sql), SQL_SELECT_PLAYERSSTATS, rank, showPlayerId);
 #if defined DEBUG
 		PrintToServer("%s\n*** Get Player Stats: %s\n", PLUGIN_LOGPREFIX, Sql);
@@ -1288,12 +1313,12 @@ public void SQL_GotRankForStatisticsPanel(Handle:owner, Handle:hndl, const Strin
 /**
  * Callback after executing SQL / got player rank and stats - now init the panel!
  */
-public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_InitRankingPanel(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
 		if (SQL_FetchRow(hndl)) {
-			decl String:playerName[MAX_NAME_LENGTH];
+			char playerName[MAX_NAME_LENGTH];
 			SQL_FetchString(hndl, 1, playerName, MAX_NAME_LENGTH);
 			new kills = SQL_FetchInt(hndl, 4);
 			new deaths = SQL_FetchInt(hndl, 8);
@@ -1302,7 +1327,7 @@ public void SQL_InitRankingPanel(Handle:owner, Handle:hndl, const String:error[]
 			new timeAlive = SQL_FetchInt(hndl, 10) + timeSinceSpawn;
 			new spawns = SQL_FetchInt(hndl, 11);
 			
-			decl String:panelLine[MAX_PANELLINE_LENGTH];
+			char panelLine[MAX_PANELLINE_LENGTH];
 			Panel panel = new Panel();
 			// check if this is the spawn welcome message
 			if (timeSinceSpawn < 10)
@@ -1371,7 +1396,7 @@ public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int par
 	PrintToServer("%s*** RankingPanelHandler *** action: %d, param1: %d, param2: %d / g_CurrentMenuState: %d", PLUGIN_LOGPREFIX, action, param1, param2, g_CurrentMenuState[param1][0]);
 #endif
 	if (action == MenuAction_Select) {
-		decl String:Sql[SQL_MAX_LENGTH];
+		char Sql[SQL_MAX_LENGTH];
 		if (g_CurrentStatsPlayerId[param1] > 0) {
 			if (param2 == 1) {
 				// show killer list
@@ -1399,12 +1424,12 @@ public int RankingPanelHandler(Menu menu, MenuAction action, int param1, int par
 /**
  * Callback after executing SQL / got the list of the killers!
  */
-public void SQL_InitKillersPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_InitKillersPanel(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		decl String:playerName[MAX_NAME_LENGTH];
-		decl String:panelLine[MAX_PANELLINE_LENGTH];
+		char playerName[MAX_NAME_LENGTH];
+		char panelLine[MAX_PANELLINE_LENGTH];
 		Panel panel = new Panel();
 		new i = 1;
 		while (SQL_FetchRow(hndl) && i <= KILLER_LIST_ITEMS) {
@@ -1436,12 +1461,12 @@ public void SQL_InitKillersPanel(Handle:owner, Handle:hndl, const String:error[]
 /**
  * Callback after executing SQL / got the list of the victims!
  */
-public void SQL_InitVictimsPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_InitVictimsPanel(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		decl String:playerName[MAX_NAME_LENGTH];
-		decl String:panelLine[MAX_PANELLINE_LENGTH];
+		char playerName[MAX_NAME_LENGTH];
+		char panelLine[MAX_PANELLINE_LENGTH];
 		Panel panel = new Panel();
 		new i = 1;
 		while (SQL_FetchRow(hndl) && i <= KILLER_LIST_ITEMS) {
@@ -1487,15 +1512,15 @@ public int RankingSubpanelHandler(Menu menu, MenuAction action, int param1, int 
 /**
  * Callback after executing SQL / got the top 3 for the explanation panel!
  */
-public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_InitExplanationPanel(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	new client = GetClientFromUserID(data, hndl, error);
 	if (client > 0) {
-		decl String:playerName[MAX_NAME_LENGTH];
+		char playerName[MAX_NAME_LENGTH];
 		GetClientName(client, playerName, sizeof(playerName));
 		// SQL_FetchString(hndl, 0, playerName, MAX_NAME_LENGTH);
 		
-		decl String:panelLine[MAX_PANELLINE_LENGTH];
+		char panelLine[MAX_PANELLINE_LENGTH];
 		Panel panel = new Panel();
 		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_WelcomeTitle", client, playerName);
 		panel.SetTitle(panelLine);
@@ -1514,7 +1539,7 @@ public void SQL_InitExplanationPanel(Handle:owner, Handle:hndl, const String:err
 			i++;
 		}
 		panel.DrawItem("", ITEMDRAW_SPACER | ITEMDRAW_RAWLINE);
-		new String:command[50] = COMMAND_TOP10;
+		char command[50] = COMMAND_TOP10;
 		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line3", client, command[3]);
 		panel.DrawText(panelLine);
 		Format(panelLine, sizeof(panelLine), "%T", "ExplainPanel_Line4", client, command[3]);
@@ -1552,7 +1577,7 @@ public int EmptyPanelHandler(Menu menu, MenuAction action, int param1, int param
  */
 public Action:DebugCommandHandler(client, args) {
 	// determine command
-	decl String:strTarget[MAX_NAME_LENGTH];
+	char strTarget[MAX_NAME_LENGTH];
 	if (args > 0) GetCmdArg(1, strTarget, sizeof(strTarget));
 	PrintToServer("%s****", PLUGIN_LOGPREFIX);
 	PrintToServer("%sDebug command executed!!!", PLUGIN_LOGPREFIX);
@@ -1662,7 +1687,7 @@ bool:SQL_OpenDB() {
 	else {
 		// no database config specified - use sqlite version
 		g_SQLite = true;
-		new Handle:kv;
+		Handle kv;
 		kv = CreateKeyValues("");
 		DB_SetConnectionKV(kv);
 		g_db = SQL_ConnectCustom(kv, g_LastError, sizeof(g_LastError), false);
@@ -1682,7 +1707,7 @@ bool:SQL_OpenDB() {
 /**
  * Callback function for connecting to database 
  */
-public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_Connected(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	if (hndl == INVALID_HANDLE || !StrEqual(error, ""))	{
 		LogMessage("%sFailed to connect to database '%s': %s", PLUGIN_LOGPREFIX, SQL_DBNAME, error);
@@ -1693,7 +1718,7 @@ public void SQL_Connected(Handle:owner, Handle:hndl, const String:error[], any:d
 		// Determine db engine
 		Database db = view_as<Database>(hndl);
 		DBDriver driver = db.Driver;
-		decl String:DBEngine[10];
+		char DBEngine[10];
 		driver.GetProduct(DBEngine, sizeof(DBEngine));
 		g_SQLite = (strcmp(DBEngine, "SQLite") == 0);
 #if defined DEBUG
@@ -1741,7 +1766,7 @@ void SQL_InitDB() {
 /**
  * Callback after executing SQL: Check schema version
  */
-public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_CheckVersion(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	if (hndl != INVALID_HANDLE && strlen(error) == 0) {
 		new version = 1;
@@ -1771,7 +1796,7 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 			DB_Cleanup(g_db, g_SQLite);
 			SQL_UnlockDatabase(g_db);
 			// Save latest schema version
-			decl String:Sql[SQL_MAX_LENGTH];
+			char Sql[SQL_MAX_LENGTH];
 			Format(Sql, sizeof(Sql), SQL_INSERT_SCHEMAVERSION, 4);
 			SQL_FastQuery(g_db, Sql);
 		} else
@@ -1782,7 +1807,7 @@ public void SQL_CheckVersion(Handle:owner, Handle:hndl, const String:error[], an
 /**
  * Callback after executing SQL: If an error occurs, just log it
  */
-public void SQL_LogError(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_LogError(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	if (strlen(error) != 0)
 		LogError("SQL error occured: %s", error);
@@ -1791,7 +1816,7 @@ public void SQL_LogError(Handle:owner, Handle:hndl, const String:error[], any:da
 /**
  * Callback after executing SQL: If an error occurs, stop the plugin (for critical queries)
  */
-public void SQL_StopOnError(Handle:owner, Handle:hndl, const String:error[], any:data)
+public void SQL_StopOnError(Handle owner, Handle hndl, const String:error[], any:data)
 {
 	if (strlen(error) != 0)
 		SetFailState("Critical SQL error occured: %s", error);
@@ -1800,7 +1825,7 @@ public void SQL_StopOnError(Handle:owner, Handle:hndl, const String:error[], any
 /**
  * Return client to user id and check given handle (default check routine for SQL callback handlers)
  */
-GetClientFromUserID(const userid, const Handle:handle, const String:error[]) {
+GetClientFromUserID(const userid, const Handle handle, const String:error[]) {
 	if (handle == INVALID_HANDLE || strlen(error) > 0) {
 		LogError("SQL error occured: %s", error);
 		return 0;
@@ -1813,7 +1838,7 @@ GetClientFromUserID(const userid, const Handle:handle, const String:error[]) {
  * Say something to almostagreatcoder!
  */
 void SayToDeveloper(const String:msg[]) {
-	decl String:playerName[MAX_NAME_LENGTH];
+	char playerName[MAX_NAME_LENGTH];
 	for (new i = 1; i <= MaxClients; i++) {
 		if (IsClientConnected(i) && !IsFakeClient(i)) {
 			GetClientName(i, playerName, sizeof(playerName));
