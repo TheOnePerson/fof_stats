@@ -60,7 +60,7 @@
 #include <geoip>
 
 #define PLUGIN_NAME 		"FoF Ranking and Statistics"
-#define PLUGIN_VERSION 		"1.2.3"
+#define PLUGIN_VERSION 		"1.3.0"
 #define PLUGIN_AUTHOR 		"almostagreatcoder"
 #define PLUGIN_DESCRIPTION 	"Enables in-game ranking and statistics"
 #define PLUGIN_URL 			"https://forums.alliedmods.net/showthread.php?t=298634"
