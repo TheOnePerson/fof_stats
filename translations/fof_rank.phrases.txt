@@ -4,465 +4,555 @@
 	{
 		"#format"	"{1:s},{2:t},{3:s},{4:d},{5:d}"
 		"en"		"{1}{2}{3} Client ID {4} (rank points {5}) issued a debug command."
+		"ru"		"{1}{2}{3} ID клиента {4} (очков ранга {5}) выдала команда отладки."
 	}
 	"ChatPrefix"
 	{
 		"en"		"[SM] [Ranking] "
+		"ru"		"[SM] [Рейтинг] "
 	}
 	"CommandReplyTop10"
 	{
 		"en"		"Usage: %s [<rank>]\nShows the ranking list. If <rank> is given, the listing starts at this rank."
+		"ru"		"Использование: %s [<ранг>]\nПоказывает список рангов. Если указан <ранг>, то список начинается с этого ранга."
 	}
 	"CommandReplyFromConsole"
 	{
 		"en"		"I'm sorry, but this command cannot be issued from the console."
+		"ru"		"Извините, но эта команда не может быть выполнена из консоли."
 	}
 	"CommandReplyPlayerNotFound"
 	{
 		"en"		"Could not find a player named '%s' in the database. Maybe you mistyped the name or this player has never been on this server?"
+		"ru"		"Не удалось найти игрока по имени '%s' в базе данных. Возможно, вы неправильно ввели имя или этот игрок никогда не был на этом сервере?"
 	}
 	"CommandReplyGivePoints"
 	{
 		"en"		"Usage: %s <name|#userid> <points>\nGive <points> to user(s). To set the points to a certain value, use this: %s <name|#userid> =<points>"
+		"ru"		"Использование: %s <имя|#userid> <очков>\nДать <очков> пользователю(-ям). Чтобы установить очки на определенное значение, используйте следующее: %s <имя|#userid> =<очков>"
 	}
 	"CommandReplyGivePoints2"
 	{
 		"en"		"Cannot execute command: amount of ranking points must be between %d and %d!"
+		"ru"		"Невозможно выполнить команду: количество рейтинговых очков должно быть между %d и %d!"
 	}
 	"CommandReplyGivePoints3"
 	{
 		"en"		"Cannot execute command: Cannot find '%s' in database!"
+		"ru"		"Невозможно выполнить команду: Невозможно найти '%s' в базе данных!"
 	}
 	"CommandResultGivePointsAbs"
 	{
 		"en"		"Points of '%s' successfully set to %d."
 		"de"		"%s's Punkte wurden erfolgreich auf %d gesetzt."
+		"ru"		"Очки '%s' успешно установлены на %d."
 	}
 	"CommandResultGivePointsInc"
 	{
 		"en"		"Points of '%s' successfully increased by %d."
 		"de"		"%s's Punkte wurden erfolgreich um %d erhöht."
+		"ru"		"Очки '%s' успешно увеличены на %d."
 	}
 	"CommandResultGivePointsDec"
 	{
 		"en"		"Points of '%s' successfully decreased by %d."
 		"de"		"%s's Punkte wurden erfolgreich um %d erniedrigt."
+		"ru"		"Очки '%s' успешно уменьшились на %d."
 	}
 	"CommandReplyRank"
 	{
 		"en"		"Usage: %s <name|#userid>\nShows own rank and statistics or those of the given player."
+		"ru"		"Использование: %s <имя|#userid>\nПоказывает собственный ранг и статистику данного игрока."
 	}
 	"CVarMessageEnabled"
 	{
 		"en"		"Ranking enabled."
 		"de"		"Ranglistenfunktionalität aktiviert."
+		"ru"		"Рейтинг включен."
 	}
 	"CVarMessageDisabled"
 	{
 		"en"		"Ranking disabled."
 		"de"		"Ranglistenfunktionalität deaktiviert."
+		"ru"		"Рейтинг отключен."
 	}
 	"AnnounceWithRankAndCountry"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s},{8:s},{9:s},{10:s},{11:s}"
 		"en"		"{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {10}{5}{11} Points!"
 		"de"		"{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {10}{5}{11} Punkten!"
+		"ru"		"{6}{1}{7} подключается из {2}!\n{8}Рейтинг: #{3}{9} из {4} игроков с {10}{5}{11} очк.!"
 	}
 	"AnnounceWithRankAndCountryNo1"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:i},{6:s},{7:s}{8:s},{9:s},{10:s},{11:s},{12:s}"
 		"en"		"{10}Buckle up! The No. 1 is coming!\n{6}{1}{7} connected from {2}!\n{8}Ranked: #{3}{9} out of {4} players with {11}{5}{12} Points!"
 		"de"		"{10}Schnallt euch an! Die Nummer 1 kommt!\n{6}{1}{7} aus {2} verbunden!\n{8}Ranglistenplatz {3}{9} (von {4}) mit {11}{5}{12} Punkten!"
+		"ru"		"{10}Держитесь крепче! Номер 1 приближается!\n{6}{1}{7} подключается из {2}!\n{8}Рейтинг: #{3}{9} из {4} игроков с {11}{5}{12} очк.!"
 	}
 	"AnnounceWithCountry"
 	{
 		"#format"	"{1:s},{2:s},{3:s},{4:s}"
 		"en"		"{3}{1}{4} connected from {2}!"
 		"de"		"{3}{1}{4} aus {2} verbunden!"
+		"ru"		"{3}{1}{4} подключается из {2}!"
 	}
 	"AnnounceWithRank"
 	{
 		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s},{10:s}"
 		"en"		"{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {9}{4}{10} Points!"
 		"de"		"{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {9}{4}{10} Punkten!"
+		"ru"		"{5}{1}{6} подключился!\n{7}Рейтинг: #{2}{8} из {3} игроков с {9}{4}{10} очк.!"
 	}
 	"AnnounceWithRankNo1"
 	{
 		"#format"	"{1:s},{2:i},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s},{9:s},{10:s},{11:s}"
 		"en"		"{9}Buckle up! Here comes No. 1!!!\n{5}{1}{6} connected!\n{7}Ranked: #{2}{8} out of {3} players with {10}{4}{11} Points!"
 		"de"		"{9}Hier kommt die Nummer 1!!!\n{5}{1}{6} verbunden!\n{7}Ranglistenplatz {2}{8} (von {3}) mit {10}{4}{11} Punkten!"
+		"ru"		"{9}Держитесь крепче! Номер 1 приближается!!!\n{5}{1}{6} подключился!\n{7}Рейтинг: #{2}{8} из {3} игроков с {10}{4}{11} очк.!"
 	}
 	"Announce"
 	{
 		"#format"	"{1:s},{2:s},{3:s}"
 		"en"		"{2}{1}{3} connected!"
 		"de"		"{2}{1}{3} verbunden!"
+		"ru"		"{2}{1}{3} подключился!"
 	}
 	"RoundSummaryPointsGained"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
 		"en"		"{1}Round summary:{2} {5}{3}{6} points earned! ({7}{4}{8} points total)"
 		"de"		"{1}Rundenwertung:{2} {5}{3}{6} Punkte verbessert! ({7}{4}{8} Punkte)"
+		"ru"		"{1}Итог раунда:{2} {5}{3}{6} очк. получено! ({7}{4}{8} очк. всего)"
 	}
 	"RoundSummaryPointsLost"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
 		"en"		"{1}Round summary:{2} {5}{3}{6} points lost! ({4} points total)"
 		"de"		"{1}Rundenwertung:{2} {5}{3}{6} Punkte verloren! ({4} Punkte)"
+		"ru"		"{1}Итог раунда:{2} {5}{3}{6} очк. потеряно! ({4} очк. всего)"
 	}
 	"RoundSummaryRankedUp"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
 		"en"		"{1}Round summary:{2} You climbed up {5}{3}{6} ranks - you are rank {7}{4}{8} now!"
 		"de"		"{1}Rundenwertung:{2} Ranglistenplatz {7}{4}{8} (Verbesserung um {5}{3}{6} Plätze!)"
+		"ru"		"{1}Итог раунда:{2} Вы поднялись по рейтингу на {5}{3}{6} - теперь у вас рейтинг {7}{4}{8}!"
 	}
 	"RoundSummaryRankedDown"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:i},{5:s},{6:s},{7:s},{8:s}"
 		"en"		"{1}Round summary:{2} You fell down {5}{3}{6} ranks - you are rank {7}{4}{8} now!"
 		"de"		"{1}Rundenwertung:{2} Ranglistenplatz {7}{4}{8} (Verschlechterung um {5}{3}{6} Plätze!)"
+		"ru"		"{1}Итог раунда:{2} Вы опустились по рейтингу на {5}{3}{6} - теперь у вас рейтинг {7}{4}{8}!"
 	}
 	"RoundSummaryRankKept"
 	{
 		"#format"	"{1:s},{2:s},{3:i},{4:s},{5:s}"
 		"en"		"{1}Round summary:{2} You kept rank {4}{3}{5}."
 		"de"		"{1}Rundenwertung:{2} Ranglistenplatz {4}{3}{5} verteidigt."
+		"ru"		"{1}Итог раунда:{2} Вы сохранили свой рейтинг {4}{3}{5}."
 	}
 	"ConfigReloaded"
 	{
 		"en"		"Config successfully reloaded."
 		"de"		"Konfiguration erfolgreich neu geladen."
+		"ru"		"Конфигурация успешно перезагружена."
 	}
 	"ConfigReloadFailed"
 	{
 		"en"		"Configuration file parsing failed! (%s)"
 		"de"		"Fehler in Konfigurationsdatei! (%s)"
+		"ru"		"Не удалось разобрать файл конфигурации! (%s)"
 	}
 	"DeathMessage"
 	{
 		"#format"	"{1:i}"
 		"en"		"You loose {1} points for being killed."
 		"de"		"Du wurdest getötet und verlierst {1} Punkte."
+		"ru"		"Вы потеряли {1} очк. за то, что вас убили."
 	}
 	"DeathMessageSingular"
 	{
 		"#format"	"{1:i}"
 		"en"		"You loose a point for being killed."
 		"de"		"Du wurdest getötet und verlierst einen Punkt."
+		"ru"		"Вы потеряли одно очко за то, что вас убили."
 	}
 	"UngracefulDeathMessage"
 	{
 		"en"		"Ungraceful death: you loose %d points."
 		"de"		"Unwürdiger Tod: Dir werden %d Punkte abgezogen."
+		"ru"		"Бесславная смерть: вы потеряли %d очк."
 	}
 	"UngracefulDeathMessageSingular"
 	{
 		"en"		"Ungraceful death: you loose a point."
 		"de"		"Unwürdiger Tod: Dir wird ein Punkt abgezogen."
+		"ru"		"Бесславная смерть: вы потеряли одно очко."
 	}
 	"KillMessage"
 	{
 		"#format"	"{1:i},{2:s}"
 		"en"		"You earn {1} points for killing {2}."
 		"de"		"Du hast {2} getötet und erhältst {1} Punkte."
+		"ru"		"Вы получили {1} очк. за убийство {2}."
 	}
 	"KillMessageSingular"
 	{
 		"#format"	"{1:s}"
 		"en"		"You earn one point for killing {1}."
 		"de"		"Du hast {1} getötet und erhältst einen Punkt."
+		"ru"		"Вы получили одно очко за убийство {1}."
 	}
 	"HeadshotMessage"
 	{
 		"#format"	"{1:i},{2:s}"
 		"en"		"You earn {1} points for killing {2} by headshot."
 		"de"		"Du hast {2} per Kopfschuss getötet und erhältst {1} Punkte."
+		"ru"		"Вы получили {1} очк. за убийство {2} попаданием в голову."
 	}
 	"HeadshotMessageSingular"
 	{
 		"#format"	"{1:s}"
 		"en"		"You earn one point for killing {1} by headshot."
 		"de"		"Du hast {1} per Kopfschuss getötet und erhältst einen Punkt."
+		"ru"		"Вы получили одно очко за убийство {1} попаданием в голову."
 	}
 	"AssistMessagePlural"
 	{
 		"#format"	"{1:i},{2:s}"
 		"en"		"You earn {1} points for an kill-assist."
 		"de"		"Du erhältst {1} Punkte für einen Kill-Assist."
+		"ru"		"Вы получили {1} очк. за помощь в убийстве."
 	}
 	"AssistMessageSingular"
 	{
 		"en"		"You earn 1 point for an assist-kill."
 		"de"		"Du erhältst einen Punkt für einen Kill-Assist."
+		"ru"		"Вы получили одно очко за помощь в убийстве."
 	}
 	"RanklistTitle"
 	{
 		"en"		"Ranking: (%i players)"
 		"de"		"Rangliste: (%i Spieler)"
+		"ru"		"Рейтинг: (игроков: %i)"
 	}
 	"RanklistLine"
 	{
 		"#format"	"{1:i},{2:s},{3:i}"
 		"en"		"- No. {1}: {2} ({3})"
 		"de"		"- Platz {1}: {2} ({3})"
+		"ru"		"- Номер {1}: {2} ({3})"
 	}
 	"RankPanel_Title"
 	{
 		"en"		"%s - Data Sheet"
 		"de"		"%s - Datenblatt"
+		"ru"		"%s - Лист данных"
 	}
 	"RankPanel_WelcomeTitle"
 	{
 		"en"		"Welcome back, %s!"
 		"de"		"Willkommen zurück, %s!"
+		"ru"		"С возвращением, %s!"
 	}
 	"RankPanel_Line1"
 	{
 		"en"		"Rank: %i (of %i players)"
 		"de"		"Platz: %i (von %i Spielern)"
+		"ru"		"Рейтинг: %i (из %i игроков)"
 	}
 	"RankPanel_Line2"
 	{
 		"en"		"Points: %i"
 		"de"		"Punkte: %i"
+		"ru"		"Очков: %i"
 	}
 	"RankPanel_Line3"
 	{
 		"en"		"Total kills: %i (%i headshots)"
 		"de"		"Kills: %i (%i Kopfschüsse)"
+		"ru"		"Всего убийств: %i (%i попаданий в голову)"
 	}
 	"RankPanel_Line4"
 	{
 		"en"		"Kill assists: %i"
 		"de"		"Unterstützte Kills: %i"
+		"ru"		"Помощи в убийстве: %i"
 	}
 	"RankPanel_Line5"
 	{
 		"en"		"Best killstreak: %i"
 		"de"		"Beste Killstreak: %i"
+		"ru"		"Лучшая серия убийств: %i"
 	}
 	"RankPanel_Line6"
 	{
 		"en"		"Total deaths: %i (%i ungraceful)"
 		"de"		"Anzahl Tode: %i (%i unwürdig)"
+		"ru"		"Всего смертей: %i (%i бесславных)"
 	}
 	"RankPanel_Line7"
 	{
 		"en"		"Lifetime in game: %i hrs, %i mins"
 		"de"		"Zeit im Spiel: %i Std., %i Min."
+		"ru"		"Прожито в игре: %i ч., %i мин."
 	}
 	"RankPanel_Line8"
 	{
 		"en"		"Avg. Lifespan: %i mins, %i secs"
 		"de"		"Durchschntl. Lebensdauer: %i Min., %i Sek."
+		"ru"		"Ср. время жизни: %i мин., %i сек."
 	}
 	"RankPanel_Line9"
 	{
 		"en"		"Kill to death ratio: %4.2f"
 		"de"		"Verhältnis Kills zu Tode: %4.2f"
+		"ru"		"Соотн. убийств и смертей: %4.2f"
 	}
 	"RankPanel_ShowKillers"
 	{
 		"en"		"List my killers"
 		"de"		"Zeige meine Killer"
+		"ru"		"Список моих убийц"
 	}
 	"RankPanel_ShowKillers3rd"
 	{
 		"en"		"List this player's killers"
 		"de"		"Zeige Killer dieses Spielers"
+		"ru"		"Список убийц этого игрока"
 	}
 	"RankPanel_ShowVictims"
 	{
 		"en"		"List my victims"
 		"de"		"Zeige meine Opfer"
+		"ru"		"Список моих жертв"
 	}
 	"RankPanel_ShowVictims3rd"
 	{
 		"en"		"List this player's victims"
 		"de"		"Zeige Opfer dieses Spielers"
+		"ru"		"Список жертв этого игрока"
 	}
 	"KillerlistTitle"
 	{
 		"en"		"Top 10 killers of %s:"
 		"de"		"Killer-Top-10 von %s:"
+		"ru"		"10 лучших убийц %s:"
 	}
 	"KillerlistLine"
 	{
 		"#format"	"{1:i},{2:s},{3:i}"
 		"en"		"Killer No. {1}: {2} ({3} times)"
 		"de"		"Killer {1}: {2} ({3}x)"
+		"ru"		"Убийца номер {1}: {2} ({3}x)"
 	}
 	"KillerlistLine_empty"
 	{
 		"en"		"- no one, congratulations! -"
 		"de"		"- niemand, Glückwunsch! -"
+		"ru"		"- никто, поздравляем! -"
 	}
 	"VictimlistTitle"
 	{
 		"en"		"Top 10 victims of %s:"
 		"de"		"Opfer-Top-10 von %s:"
+		"ru"		"10 лучших жертв %s:"
 	}
 	"VictimlistLine"
 	{
 		"#format"	"{1:i},{2:s},{3:i}"
 		"en"		"Victim No. {1}: {2} ({3} times)"
 		"de"		"Opfer {1}: {2} ({3} Kills)"
+		"ru"		"Жертва номер {1}: {2} ({3}x)"
 	}
 	"VictimlistLine_empty"
 	{
 		"en"		"- no one yet -"
 		"de"		"- noch niemand -"
+		"ru"		"- пока никто -"
 	}
 	"ExplainPanel_WelcomeTitle"
 	{
 		"en"		"Welcome, %s!"
 		"de"		"Willkommen, %s!"
+		"ru"		"Добро пожаловать, %s!"
 	}
 	"ExplainPanel_Line1"
 	{
 		"en"		"There are currently %i players in the ranking list."
 		"de"		"Es gibt aktuell %i Spieler in der Rangliste."
+		"ru"		"В настоящее время в рейтинг-листе находится %i игроков."
 	}
 	"ExplainPanel_Line2"
 	{
 		"en"		"Here are the top 3:"
 		"de"		"Hier die Top 3:"
+		"ru"		"Вот три лучших:"
 	}
 	"ExplainPanel_Rankline"
 	{
 		"#format"	"{1:i},{2:s},{3:i}"
 		"en"		"No. {1}: {2} ({3} Points)"
 		"de"		"Platz {1}: {2} ({3} Pkt.)"
+		"ru"		"Номер {1}: {2} ({3} очк.)"
 	}
 	"ExplainPanel_Line3"
 	{
 		"en"		"Say '%s' to view the ranking list."
 		"de"		"Sage '!%s', um die Rangliste anzuzeigen."
+		"ru"		"Введите в чат '%s', чтобы просмотреть список рейтингов."
 	}
 	"ExplainPanel_Line4"
 	{
 		"en"		"Say '%s N' to view the ranking list starting from pos. N."
 		"de"		"Sage '!%s N', um die Liste ab Platz N anzuzeigen."
+		"ru"		"Введите в чат '%s N', чтобы просмотреть список рейтингов, начиная с поз. номер."
 	}
 	"ExplainPanel_Line5"
 	{
 		"en"		"Say '%s' to view your own ranking data."
 		"de"		"Sage '!%s', um deine Ranglistendaten anzuzeigen."
+		"ru"		"Введите в чат '%s', чтобы просмотреть данные собственного рейтинга."
 	}
 	"ExplainPanel_Line6"
 	{
 		"en"		"Say '%s PLAYERNAME' to view the data of that player."
 		"de"		"Sage '!%s NAME', um die Daten von NAME anzuzeigen."
+		"ru"		"Введите в чат '%s ИМЯ ИГРОКА', чтобы просмотреть данные этого игрока."
 	}
 	"Close"
 	{
 		"en"		"Close"
 		"de"		"Schließen"
+		"ru"		"Закрыть"
 	}
 	"kick-fall"
 	{
 		"en"		"Kick and Fall"
 		"de"		"Tritt in den Abgrund"
+		"ru"		"Пинок и падение"
 	}
 	"flame"
 	{
 		"en"		"Flames"
 		"de"		"Flammen"
+		"ru"		"Пламя"
 	}
 	"thrown_gun"
 	{
 		"en"		"Thrown gun"
 		"de"		"Geworfene Pistole"
+		"ru"		"Брошенное оружие"
 	}
 	"kick"
 	{
 		"en"		"Kick"
 		"de"		"Tritt"
+		"ru"		"Пинок"
 	}
 	"blast"
 	{
 		"en"		"Blast"
 		"de"		"Explosion"
+		"ru"		"Взрыв"
 	}
 	"physics"
 	{
 		"en"		"Thrown Dynamite"
 		"de"		"Geworfenes Dynamit"
+		"ru"		"Брошенный динамит"
 	}
 	"dynamite_black"
 	{
 		"en"		"Black Dynamite"
 		"de"		"Schwarzes Dynamit"
+		"ru"		"Чёрный динамит"
 	}
 	"dynamite_yellow"
 	{
 		"en"		"Yellow Dynamite"
 		"de"		"Gelbes Dynamit"
+		"ru"		"Жёлтый динамит"
 	}
 	"dynamite"
 	{
 		"en"		"Dynamite"
 		"de"		"Dynamit"
+		"ru"		"Динамит"
 	}
 	"arrow"
 	{
 		"en"		"Bow and Arrow"
 		"de"		"Pfeil und Bogen"
+		"ru"		"Лук и стрела"
 	}
 	"thrown_knife"
 	{
 		"en"		"Thrown Knife"
 		"de"		"Geworfenes Messer"
+		"ru"		"Брошенный нож"
 	}
 	"thrown_axe"
 	{
 		"en"		"Thrown Axe"
 		"de"		"Geworfene Axt"
+		"ru"		"Брошенный топор"
 	}
 	"thrown_machete"
 	{
 		"en"		"Thrown Machete"
 		"de"		"Geworfene Machete"
+		"ru"		"Брошенный мачете"
 	}
 	"fists"
 	{
 		"en"		"Fists"
 		"de"		"Fäuste"
+		"ru"		"Кулаки"
 	}
 	"fists_brass"
 	{
 		"en"		"Brass Knuckles"
 		"de"		"Schlagring"
+		"ru"		"Латунный кастет"
 	}
 	"knife"
 	{
 		"en"		"Knife"
 		"de"		"Messer"
+		"ru"		"Нож"
 	}
 	"deringer"
 	{
 		"en"		"Deringer"
 		"de"		"Deringer"
+		"ru"		"Дерринджер"
 	}
 	"volcanic"
 	{
 		"en"		"Volcanic Pistol"
 		"de"		"Volcanic Pistol"
+		"ru"		"Вулканик"
 	}
 	"coltnavy"
 	{
 		"en"		"Colt Navy"
 		"de"		"Colt Navy"
+		"ru"		"Кольт Нэви"
 	}
 	"axe"
 	{
 		"en"		"Axe"
 		"de"		"Axt"
+		"ru"		"Топор"
 	}
 	"sawedoff_shotgun"
 	{
 		"en"		"Sawed-Off Shotgun"
 		"de"		"Sawed-Off Shotgun"
+		"ru"		"Обрез"
 	}
 	"maresleg"
 	{
@@ -473,6 +563,7 @@
 	{
 		"en"		"Remington Army"
 		"de"		"Remington Army"
+		"ru"		"Ремингтон"
 	}
 	"schofield"
 	{
@@ -483,40 +574,48 @@
 	{
 		"en"		"Smith Carbine"
 		"de"		"Smith Carbine"
+		"ru"		"Карабин Смита"
 	}
 	"peacemaker"
 	{
 		"en"		"Colt Peacemaker"
 		"de"		"Colt Peacemaker"
+		"ru"		"Кольт Миротворец"
 	}
 	"henryrifle"
 	{
 		"en"		"Henry Rifle"
 		"de"		"Henry Rifle"
+		"ru"		"Винтовка Генри"
 	}
 	"coachgun"
 	{
 		"en"		"Coachgun"
 		"de"		"Coachgun"
+		"ru"		"Двустволка"
 	}
 	"machete"
 	{
 		"en"		"Machete"
 		"de"		"Machete"
+		"ru"		"Мачете"
 	}
 	"shotgun"
 	{
 		"en"		"Pump Shotgun"
 		"de"		"Pump Shotgun"
+		"ru"		"Помповый дробовик"
 	}
 	"sharps"
 	{
 		"en"		"Sharps Rifle"
 		"de"		"Sharps Rifle"
+		"ru"		"Винтовка Шарпса"
 	}
 	"walker"
 	{
 		"en"		"Colt Walker"
 		"de"		"Colt Walker"
+		"ru"		"Кольт Уолкер"
 	}
 }
